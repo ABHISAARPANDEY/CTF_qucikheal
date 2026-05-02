@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { buildTelemetryEntry, isSideChannelPayload } from './telemetry';
+import {
+  isValidHoneypotActivity,
+  isValidHoneypotAnalysis,
+  isValidPipelinePayload,
+  isValidScenarioEvent,
+  isValidSystemUpdate
+} from './wsValidators';
 
 
 
@@ -121,19 +128,12 @@ export function useRealtimeEvents({
         if (!payload || typeof payload !== 'object') return;
 
         setData((prev) => {
-          const isPipeline = Boolean(
-            payload.event != null || payload.threat != null || payload.actions != null
-          );
+          const isPipeline = isValidPipelinePayload(payload);
           const isSide = isSideChannelPayload(payload);
-          const isScenario = payload.type === 'scenario_event';
-          const isSystemUpdate =
-          payload.type === 'system_update' &&
-          typeof payload.system === 'string' &&
-          payload.data != null;
-          const isHoneypotActivity =
-          payload.type === 'honeypot_activity' && payload.data != null;
-          const isHoneypotAnalysis =
-          payload.type === 'honeypot_analysis' && payload.data != null;
+          const isScenario = isValidScenarioEvent(payload);
+          const isSystemUpdate = isValidSystemUpdate(payload);
+          const isHoneypotActivity = isValidHoneypotActivity(payload);
+          const isHoneypotAnalysis = isValidHoneypotAnalysis(payload);
 
           let telemetryLogs = prev.telemetryLogs ?? [];
           if (isSide) {

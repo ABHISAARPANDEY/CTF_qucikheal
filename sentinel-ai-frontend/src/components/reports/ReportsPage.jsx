@@ -60,6 +60,27 @@ export default function ReportsPage() {
     };
   }, [events, actions, scenarioEvents, honeypotActivities, honeypotAnalyses, systemUpdates]);
 
+  const executive = useMemo(() => {
+    const timeline = [...scenarioEvents]
+      .reverse()
+      .filter((e) => e && e.ts)
+      .sort((a, b) => Date.parse(a.ts) - Date.parse(b.ts));
+    const firstWarning = timeline.find((e) => e.severity === 'warning' || e.severity === 'high' || e.severity === 'critical');
+    const firstCritical = timeline.find((e) => e.severity === 'critical');
+    const firstHoneypot = [...honeypotActivities].reverse().find((e) => e && e.ts);
+    const detectionSeconds =
+      firstWarning && firstCritical ? Math.max(0, (Date.parse(firstCritical.ts) - Date.parse(firstWarning.ts)) / 1000) : null;
+    const containmentSeconds =
+      firstCritical && firstHoneypot ? Math.max(0, (Date.parse(firstHoneypot.ts) - Date.parse(firstCritical.ts)) / 1000) : null;
+    return {
+      detectionSeconds,
+      containmentSeconds,
+      openCriticalSystems: summary.criticalSystems,
+      mitigationActions: actions.length,
+      activeScenarioCount: new Set(scenarioEvents.map((e) => e.run_id).filter(Boolean)).size
+    };
+  }, [scenarioEvents, honeypotActivities, summary.criticalSystems, actions.length]);
+
   const incident = useMemo(
     () => ({
       generated_at: new Date().toISOString(),
@@ -126,6 +147,14 @@ export default function ReportsPage() {
         <Metric label="honeypot findings" value={summary.honeypotAnalyses} tone="violet" />
       </section>
 
+      <section className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+        <Metric label="mttd (sec)" value={fmtMetric(executive.detectionSeconds)} tone="cyan" />
+        <Metric label="containment (sec)" value={fmtMetric(executive.containmentSeconds)} tone="green" />
+        <Metric label="active incidents" value={executive.activeScenarioCount} tone="violet" />
+        <Metric label="mitigations" value={executive.mitigationActions} tone="green" />
+        <Metric label="open critical" value={executive.openCriticalSystems} tone="red" />
+      </section>
+
       <section className="flex-1 min-h-0 rounded-2xl border border-border-subtle glass-panel p-3 overflow-y-auto scrollbar-cyber">
         <h2 className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-faint mb-2">incident timeline</h2>
         <ul className="space-y-1.5">
@@ -159,4 +188,9 @@ function Metric({ label, value, tone }) {
       <div className="font-mono text-[22px] leading-none mt-1">{value}</div>
     </div>
   );
+}
+
+function fmtMetric(value) {
+  if (value === null || Number.isNaN(value)) return '—';
+  return value.toFixed(1);
 }

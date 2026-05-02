@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Suspense, lazy, useState } from 'react';
 import { Routes, Route, Outlet, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import AmbientBackground from './components/AmbientBackground';
@@ -11,11 +11,12 @@ import RiskMeterPanel from './components/panels/RiskMeterPanel';
 import AttackControlPanel from './components/panels/AttackControlPanel';
 import AttackTimelinePanel from './components/panels/AttackTimelinePanel';
 import AICopilotPanel from './components/panels/AICopilotPanel';
-import SystemsMonitorPage from './components/systems/SystemsMonitorPage';
 import SystemsOverviewPanel from './components/systems/SystemsOverviewPanel';
-import InfrastructureView from './components/infrastructure/InfrastructureView';
-import HoneypotPage from './components/honeypot/HoneypotPage';
-import ReportsPage from './components/reports/ReportsPage';
+
+const SystemsMonitorPage = lazy(() => import('./components/systems/SystemsMonitorPage'));
+const InfrastructureView = lazy(() => import('./components/infrastructure/InfrastructureView'));
+const HoneypotPage = lazy(() => import('./components/honeypot/HoneypotPage'));
+const ReportsPage = lazy(() => import('./components/reports/ReportsPage'));
 
 
 
@@ -32,16 +33,34 @@ export default function App() {
         <Route element={<AppShell />}>
           <Route index element={<DashboardView />} />
           <Route path="scenarios" element={<AttackPanel />} />
-          <Route path="systems" element={<SystemsMonitorPage />} />
-          <Route path="infrastructure" element={<InfrastructureView />} />
-          <Route path="honeypot" element={<HoneypotPage />} />
-          <Route path="reports" element={<ReportsPage />} />
+          <Route path="systems" element={<LazyRoute><SystemsMonitorPage /></LazyRoute>} />
+          <Route path="infrastructure" element={<LazyRoute><InfrastructureView /></LazyRoute>} />
+          <Route path="honeypot" element={<LazyRoute><HoneypotPage /></LazyRoute>} />
+          <Route path="reports" element={<LazyRoute><ReportsPage /></LazyRoute>} />
           <Route path="settings" element={<ComingSoon section="settings" />} />
           <Route path="support" element={<ComingSoon section="support" />} />
         </Route>
       </Routes>
     </div>);
 
+}
+
+function LazyRoute({ children }) {
+  return (
+    <Suspense fallback={<RouteLoadingFallback />}>
+      {children}
+    </Suspense>
+  );
+}
+
+function RouteLoadingFallback() {
+  return (
+    <div className="flex-1 min-h-0 flex items-center justify-center p-6">
+      <div className="rounded-xl border border-neon-cyan/30 bg-bg-elevated/45 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.22em] text-neon-cyan shadow-[0_0_18px_-8px_rgba(0,212,255,0.65)]">
+        loading module...
+      </div>
+    </div>
+  );
 }
 
 function AppShell() {

@@ -51,6 +51,7 @@ from typing import Any, Awaitable, Callable, Literal, Optional
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
+from app.models.ws_frames import validate_ws_frame
 from app.services.banking_simulation import (
     API_GATEWAY,
     AUTH_SERVICE,
@@ -506,7 +507,8 @@ def make_websocket_emitter(manager: Any) -> EmitFn:
     """Build an :data:`EmitFn` that JSON-encodes frames and broadcasts."""
 
     async def _emit(frame: dict[str, Any]) -> None:
-        await manager.broadcast_text(json.dumps(frame, default=str))
+        validated = validate_ws_frame(frame)
+        await manager.broadcast_text(json.dumps(validated, default=str))
 
     return _emit
 

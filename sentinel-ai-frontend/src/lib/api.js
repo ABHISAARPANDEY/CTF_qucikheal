@@ -107,3 +107,12 @@ export async function copilotChat(prompt) {
   }
   return res.json();
 }
+
+export async function resetDemoState() {
+  const res = await fetch(`${API_PREFIX}/demo/reset`, { method: 'POST' });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`demo/reset ${res.status}: ${detail}`);
+  }
+  return res.json();
+}

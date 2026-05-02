@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { Activity, Bell, Search, Bot, UserCog } from 'lucide-react';
+import { Activity, Bell, Search, Bot, UserCog, RotateCcw } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { cn } from '../lib/utils';
 import { useRealtime } from '../lib/useRealtime';
 import { selectStatus } from '../lib/selectors';
+import { resetDemoState } from '../lib/api';
 
 function useClock() {
   const [now, setNow] = useState(() => new Date());
@@ -24,9 +25,20 @@ d.toLocaleDateString('en-US', { weekday: 'short', day: '2-digit', month: 'short'
 
 export default function Topbar({ mode, onModeChange }) {
   const now = useClock();
-
+  const [resetting, setResetting] = useState(false);
 
   const wsStatus = useRealtime(selectStatus);
+  const handleReset = async () => {
+    if (resetting) return;
+    setResetting(true);
+    try {
+      await resetDemoState();
+    } catch {
+      void 0;
+    } finally {
+      setResetting(false);
+    }
+  };
 
   return (
     <header className="relative z-10 flex h-16 shrink-0 items-center gap-4 border-b border-border-subtle glass-deep px-6">
@@ -57,6 +69,17 @@ export default function Topbar({ mode, onModeChange }) {
 
       {}
       <ModeToggle mode={mode} onChange={onModeChange} />
+
+      <Button
+        type="button"
+        variant="outline"
+        onClick={handleReset}
+        disabled={resetting}
+        className="h-9 rounded-lg border-neon-violet/35 text-neon-violet hover:border-neon-violet/65 hover:bg-neon-violet/[0.08] font-mono text-[10px] uppercase tracking-[0.2em]"
+      >
+        <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
+        {resetting ? 'resetting...' : 'demo reset'}
+      </Button>
 
       {}
       <Button

@@ -23,6 +23,7 @@ import logging
 import random
 from typing import Any, Optional
 
+from app.models.ws_frames import validate_ws_frame
 from app.services.websocket import ConnectionManager
 
 logger = logging.getLogger(__name__)
@@ -280,7 +281,8 @@ def _foreign_binary() -> str:
 
 async def broadcast_json(manager: ConnectionManager, payload: dict[str, Any]) -> None:
     """Serialize ``payload`` and fan out to all WS clients."""
-    await manager.broadcast_text(json.dumps(payload, default=str))
+    validated = validate_ws_frame(payload)
+    await manager.broadcast_text(json.dumps(validated, default=str))
 
 
 async def stream_attack_side_channel(

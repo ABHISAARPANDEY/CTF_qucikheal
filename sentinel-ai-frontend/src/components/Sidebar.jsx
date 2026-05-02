@@ -12,6 +12,13 @@ import {
   LifeBuoy } from
 'lucide-react';
 
+const PREFETCH = {
+  '/systems': () => import('./systems/SystemsMonitorPage'),
+  '/infrastructure': () => import('./infrastructure/InfrastructureView'),
+  '/honeypot': () => import('./honeypot/HoneypotPage'),
+  '/reports': () => import('./reports/ReportsPage')
+};
+
 const NAV = [
 { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, to: '/' },
 { id: 'scenarios', label: 'Attack Scenarios', icon: Crosshair, to: '/scenarios' },
@@ -116,6 +123,14 @@ function NavItem({ item }) {
       <NavLink
         to={item.to}
         end={end}
+        onMouseEnter={() => {
+          const prefetch = PREFETCH[item.to];
+          if (prefetch) void prefetch();
+        }}
+        onFocus={() => {
+          const prefetch = PREFETCH[item.to];
+          if (prefetch) void prefetch();
+        }}
         className={({ isActive }) =>
         [
         'group relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left overflow-hidden',

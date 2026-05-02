@@ -69,6 +69,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Optional
 
+from app.models.ws_frames import validate_ws_frame
+
 logger = logging.getLogger(__name__)
 
                                                                               
@@ -828,6 +830,7 @@ def make_websocket_emitter(manager: Any) -> EmitFn:
     """
 
     async def _emit(frame: dict[str, Any]) -> None:
-        await manager.broadcast_text(json.dumps(frame, default=str))
+        validated = validate_ws_frame(frame)
+        await manager.broadcast_text(json.dumps(validated, default=str))
 
     return _emit

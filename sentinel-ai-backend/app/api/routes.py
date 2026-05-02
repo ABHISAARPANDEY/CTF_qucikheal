@@ -1,7 +1,7 @@
 """Top-level API router and base routes."""
 
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 from fastapi import APIRouter, HTTPException, Query, status
 from pydantic import BaseModel
@@ -35,6 +35,14 @@ _THREAT_TO_SCENARIO: dict[str, str] = {
     "brute_force": "brute_force",
     "sql_injection": "sql_injection",
     "insider": "insider",
+    "port_scan": "multi_stage",
+    "malware": "multi_stage",
+    "phishing": "insider",
+    "data_exfiltration": "insider",
+    "privilege_escalation": "multi_stage",
+    "lateral_movement": "multi_stage",
+    "anomaly": "multi_stage",
+    "unknown": "multi_stage",
 }
 
 
@@ -43,6 +51,15 @@ class HealthResponse(BaseModel):
     service: str
     version: str
     environment: str
+    timestamp: datetime
+
+
+class ReadyResponse(BaseModel):
+    status: str
+    orchestrator_enabled: bool
+    banking_simulator_enabled: bool
+    attack_orchestrator_ready: bool
+    banking_simulator_ready: bool
     timestamp: datetime
 
 
@@ -61,6 +78,40 @@ async def health_check() -> HealthResponse:
         service=settings.app_name,
         version=settings.app_version,
         environment=settings.environment,
+        timestamp=datetime.now(timezone.utc),
+    )
+
+
+@api_router.get(
+    "/ready",
+    response_model=ReadyResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["system"],
+    summary="Service readiness check",
+)
+async def readiness_check() -> ReadyResponse:
+    settings = get_settings()
+    attack_ready = True
+    banking_ready = True
+
+    if settings.banking_simulator_enabled:
+        try:
+            get_banking_simulator()
+        except RuntimeError:
+            banking_ready = False
+    if settings.banking_simulator_enabled:
+        try:
+            get_attack_orchestrator()
+        except RuntimeError:
+            attack_ready = False
+
+    ready = attack_ready and banking_ready
+    return ReadyResponse(
+        status="ready" if ready else "not_ready",
+        orchestrator_enabled=settings.orchestrator_enabled,
+        banking_simulator_enabled=settings.banking_simulator_enabled,
+        attack_orchestrator_ready=attack_ready,
+        banking_simulator_ready=banking_ready,
         timestamp=datetime.now(timezone.utc),
     )
 
@@ -113,7 +164,9 @@ async def trigger_pipeline(
     result = await run_pipeline(attack_type=attack_type)
     await manager.broadcast_text(result.model_dump_json())
     if result.threat.severity.value in {"high", "critical"}:
-        scenario_type = _THREAT_TO_SCENARIO.get(result.threat.threat_type.value)
+        scenario_type = _THREAT_TO_SCENARIO.get(
+            result.threat.threat_type.value, "multi_stage"
+        )
         if scenario_type is not None:
             try:
                 await get_attack_orchestrator().trigger(scenario_type)
@@ -139,6 +192,12 @@ class CopilotChatRequest(BaseModel):
 
 class CopilotChatResponse(BaseModel):
     answer: str
+
+
+class DemoResetResponse(BaseModel):
+    cancelled_scenarios: int
+    banking_attacks_cleared: bool
+    active_after_reset: list[dict[str, Any]]
 
 
 @api_router.post(
@@ -256,3 +315,29 @@ async def copilot_chat(payload: CopilotChatRequest) -> CopilotChatResponse:
         )
     answer = generate_chat_response(payload.prompt.strip())
     return CopilotChatResponse(answer=answer)
+
+
+@api_router.post(
+    "/demo/reset",
+    response_model=DemoResetResponse,
+    status_code=status.HTTP_200_OK,
+    tags=["system"],
+    summary="Reset active attacks and scenarios for demos",
+)
+async def reset_demo_state() -> DemoResetResponse:
+    try:
+        simulator = get_banking_simulator()
+        orchestrator = get_attack_orchestrator()
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+
+    cancelled = await orchestrator.cancel_all()
+    await simulator.clear_attacks()
+    return DemoResetResponse(
+        cancelled_scenarios=cancelled,
+        banking_attacks_cleared=True,
+        active_after_reset=orchestrator.active_runs,
+    )

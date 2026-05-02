@@ -1,8 +1,10 @@
 """FastAPI application entrypoint for SentinelAI."""
 
 from contextlib import asynccontextmanager
+import time
+from uuid import uuid4
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import api_router
@@ -99,6 +101,23 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.middleware("http")
+    async def request_context_middleware(request: Request, call_next):
+        request_id = request.headers.get("x-request-id") or uuid4().hex
+        started = time.perf_counter()
+        response = await call_next(request)
+        elapsed_ms = int((time.perf_counter() - started) * 1000)
+        response.headers["x-request-id"] = request_id
+        logger.info(
+            "request_id=%s method=%s path=%s status=%s duration_ms=%s",
+            request_id,
+            request.method,
+            request.url.path,
+            response.status_code,
+            elapsed_ms,
+        )
+        return response
 
     app.include_router(api_router, prefix=settings.api_prefix)
     app.include_router(ws_router)                                       
