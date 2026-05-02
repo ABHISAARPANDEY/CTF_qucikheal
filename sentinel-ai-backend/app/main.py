@@ -22,6 +22,7 @@ from app.services.banking_simulation import (
     make_websocket_emitter,
 )
 from app.services.ai_copilot import make_a4f_provider, set_provider
+from app.services.kafka_ingest import init_kafka_ingestor
 from app.services.websocket import init_orchestrator, manager, ws_router
 
 settings = get_settings()
@@ -55,6 +56,7 @@ async def lifespan(app: FastAPI):
 
     banking = None
     attack_orch = None
+    kafka_ingestor = None
     if settings.banking_simulator_enabled:
         banking = init_banking_simulator(
             emit=make_websocket_emitter(manager),
@@ -71,10 +73,19 @@ async def lifespan(app: FastAPI):
             simulator=banking,
             emit=make_attack_emitter(manager),
         )
+    if settings.kafka_enabled:
+        kafka_ingestor = init_kafka_ingestor(
+            bootstrap_servers=settings.kafka_bootstrap_servers,
+            topic=settings.kafka_topic_raw_events,
+            group_id=settings.kafka_group_id,
+        )
+        await kafka_ingestor.start()
 
     try:
         yield
     finally:
+        if kafka_ingestor is not None:
+            await kafka_ingestor.stop()
         if attack_orch is not None:
             await attack_orch.cancel_all()
         if banking is not None:

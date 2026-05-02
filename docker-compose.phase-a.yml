@@ -1,0 +1,66 @@
+name: sentinelai-phase-a
+
+services:
+  backend:
+    build:
+      context: ./sentinel-ai-backend
+    container_name: sentinelai-backend
+    environment:
+      ENVIRONMENT: production
+      CORS_ORIGINS: http://localhost:8080
+      KAFKA_ENABLED: "true"
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      KAFKA_TOPIC_RAW_EVENTS: raw.events
+      KAFKA_GROUP_ID: sentinelai-pipeline
+    ports:
+      - "8000:8000"
+    depends_on:
+      redpanda:
+        condition: service_started
+
+  frontend:
+    build:
+      context: ./sentinel-ai-frontend
+    container_name: sentinelai-frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+
+  redpanda:
+    image: redpandadata/redpanda:v24.1.10
+    container_name: sentinelai-redpanda
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp
+      - "1"
+      - --memory
+      - 1G
+      - --reserve-memory
+      - 0M
+      - --node-id
+      - "0"
+      - --check=false
+      - --kafka-addr
+      - PLAINTEXT://0.0.0.0:9092,OUTSIDE://0.0.0.0:19092
+      - --advertise-kafka-addr
+      - PLAINTEXT://redpanda:9092,OUTSIDE://localhost:19092
+      - --pandaproxy-addr
+      - 0.0.0.0:8082
+      - --advertise-pandaproxy-addr
+      - redpanda:8082
+    ports:
+      - "19092:19092"
+      - "8082:8082"
+
+  console:
+    image: redpandadata/console:v2.7.2
+    container_name: sentinelai-kafka-console
+    environment:
+      KAFKA_BROKERS: redpanda:9092
+    ports:
+      - "8090:8080"
+    depends_on:
+      - redpanda

@@ -301,10 +301,37 @@ hack4good/
 - `docs/ARCHITECTURE.md` — deep technical architecture and data flow
 - `docs/API_REFERENCE.md` — endpoint and websocket reference with examples
 - `docs/JUDGE_PITCH.md` — judge/demo narrative and talking points
+- `docs/REAL_LAB_DEPLOYMENT.md` — Phase A/B/C real deployment and lab wiring
 
 ---
 
 ## 15) Vision Statement
 
 SentinelAI is not just a dashboard; it is a **live cyber storytelling engine** for defenders: detect, decide, respond, and investigate in one coherent experience.
+
+---
+
+## 16) Deploy on Render (Free Tier)
+
+This repository includes a Render blueprint file at `render.yaml` that creates:
+
+- one **Web Service** (`sentinel-ai-backend`)
+- one **Static Site** (`sentinel-ai-frontend`)
+
+### Steps
+
+1. Push this repository to GitHub.
+2. In Render, click **New +** -> **Blueprint**.
+3. Connect the repo and deploy.
+4. After backend deploys, copy its public URL (example: `https://sentinel-ai-backend.onrender.com`).
+5. Open the frontend static site settings and set:
+   - `VITE_API_BASE_URL=https://your-backend-url.onrender.com`
+   - `VITE_WS_BASE_URL=wss://your-backend-url.onrender.com`
+6. Trigger a manual redeploy of the frontend static site.
+
+### Notes
+
+- Free tier services sleep when inactive. First request may be slow ("cold start").
+- Backend health check path is `/api/v1/health`.
+- `CORS_ORIGINS` is set to `*` in `render.yaml` for easy demo deployment.
 

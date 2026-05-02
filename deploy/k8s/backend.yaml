@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  namespace: sentinelai
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      containers:
+        - name: backend
+          image: sentinelai/backend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          env:
+            - name: ENVIRONMENT
+              value: production
+            - name: CORS_ORIGINS
+              value: https://sentinel.example.com
+            - name: KAFKA_ENABLED
+              value: "true"
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              value: kafka.sentinelai.svc.cluster.local:9092
+            - name: KAFKA_TOPIC_RAW_EVENTS
+              value: raw.events
+            - name: KAFKA_GROUP_ID
+              value: sentinelai-pipeline
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: sentinelai
+spec:
+  selector:
+    app: backend
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000

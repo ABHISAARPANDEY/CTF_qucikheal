@@ -1,0 +1,17 @@
+name: sentinelai-phase-b
+
+services:
+  juice-shop:
+    image: bkimminich/juice-shop:latest
+    container_name: sentinelai-juice-shop
+    ports:
+      - "3000:3000"
+
+  lab-producer:
+    build:
+      context: ./sentinel-ai-backend
+    container_name: sentinelai-lab-producer
+    command: ["python", "scripts/publish_lab_events.py"]
+    depends_on:
+      - redpanda
+      - backend
