@@ -52,6 +52,7 @@ from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 
 from app.models.ws_frames import validate_ws_frame
+from app.services.pipeline import run_pipeline
 from app.services.banking_simulation import (
     API_GATEWAY,
     AUTH_SERVICE,
@@ -60,10 +61,19 @@ from app.services.banking_simulation import (
     BankingSimulator,
 )
 from app.services.honeypot_simulation import HoneypotSimulator
+from app.services.websocket import manager
 
 logger = logging.getLogger(__name__)
 
 EmitFn = Callable[[dict[str, Any]], Awaitable[None]]
+
+_SCENARIO_TO_PIPELINE: dict[str, str | None] = {
+    "ddos": "ddos",
+    "brute_force": "brute_force",
+    "sql_injection": "sql_injection",
+    "insider": None,
+    "multi_stage": None,
+}
 
 
                                                                               
@@ -572,6 +582,12 @@ async def trigger_attack(payload: AttackTriggerRequest) -> AttackTriggerResponse
             detail=str(exc),
         ) from exc
     summary = await orchestrator.trigger(payload.type)
+    pipeline_type = _SCENARIO_TO_PIPELINE.get(payload.type)
+    try:
+        result = await run_pipeline(attack_type=pipeline_type)
+        await manager.broadcast_text(result.model_dump_json())
+    except Exception:
+        logger.exception("failed to broadcast pipeline frame for /attack trigger")
     return AttackTriggerResponse(**summary)
 
 

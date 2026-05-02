@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Bug, Play, Skull, Square } from 'lucide-react';
 import { cancelAllScenarios, triggerScenario } from '../../lib/api';
+import { ATTACKS } from '../scenarios/attacks';
 import { useRealtime } from '../../lib/useRealtime';
 import {
   selectHoneypotActivities,
@@ -22,7 +23,7 @@ import {
 './honeypotIntel';
 
 export default function HoneypotPage() {
-  const [attackType, setAttackType] = useState('multi_stage');
+  const [attackVectorId, setAttackVectorId] = useState('multi-vector');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
@@ -31,24 +32,31 @@ export default function HoneypotPage() {
   const allHoneypotAnalyses = useRealtime(selectHoneypotAnalyses);
   const newestEvent = useRealtime(selectNewestEvent);
 
+  const selectedVector = useMemo(
+    () => ATTACKS.find((a) => a.id === attackVectorId) ?? ATTACKS[0],
+    [attackVectorId]
+  );
+  const selectedScenarioType = selectedVector?.backendType ?? 'multi_stage';
+
   const latestHoneypot = allHoneypotActivities[0] ?? allHoneypotAnalyses[0] ?? null;
   const liveRunId = latestHoneypot?.run_id ?? allScenarioEvents[0]?.run_id ?? 'standby';
   const liveAttackType =
   latestHoneypot?.attack_type && ATTACK_TYPES.includes(latestHoneypot.attack_type) ?
   latestHoneypot.attack_type :
-  attackType;
+  selectedScenarioType;
 
   useEffect(() => {
     if (
     latestHoneypot?.attack_type &&
-    ATTACK_TYPES.includes(latestHoneypot.attack_type) &&
-    latestHoneypot.attack_type !== attackType)
+    ATTACK_TYPES.includes(latestHoneypot.attack_type))
     {
-      const t = setTimeout(() => setAttackType(latestHoneypot.attack_type), 0);
+      const mappedVector = ATTACKS.find((a) => a.backendType === latestHoneypot.attack_type);
+      if (!mappedVector || mappedVector.id === attackVectorId) return undefined;
+      const t = setTimeout(() => setAttackVectorId(mappedVector.id), 0);
       return () => clearTimeout(t);
     }
     return undefined;
-  }, [latestHoneypot, attackType]);
+  }, [latestHoneypot, attackVectorId]);
 
   const runEvents = useMemo(() => {
     if (liveRunId === 'standby') return allScenarioEvents.slice(0, 80);
@@ -85,7 +93,7 @@ export default function HoneypotPage() {
     setBusy(true);
     setError(null);
     try {
-      await triggerScenario(attackType);
+      await triggerScenario(selectedScenarioType);
     } catch (err) {
       setError(err?.message ?? 'failed to dispatch attack');
     } finally {
@@ -109,8 +117,9 @@ export default function HoneypotPage() {
   return (
     <div className="flex-1 min-h-0 flex flex-col p-3 gap-3 overflow-hidden">
       <PageHeader
-        attackType={attackType}
-        onAttackTypeChange={setAttackType}
+        attackVectorId={attackVectorId}
+        selectedScenarioType={selectedScenarioType}
+        onAttackVectorChange={setAttackVectorId}
         onLaunch={onLaunch}
         onAbort={onAbort}
         busy={busy}
@@ -153,8 +162,9 @@ export default function HoneypotPage() {
 }
 
 function PageHeader({
-  attackType,
-  onAttackTypeChange,
+  attackVectorId,
+  selectedScenarioType,
+  onAttackVectorChange,
   onLaunch,
   onAbort,
   busy,
@@ -188,7 +198,12 @@ function PageHeader({
       </div>
 
       <div className="flex items-center gap-2 shrink-0 flex-wrap">
-        <AttackPicker value={attackType} onChange={onAttackTypeChange} disabled={busy} />
+        <AttackPicker
+          value={attackVectorId}
+          scenarioType={selectedScenarioType}
+          onChange={onAttackVectorChange}
+          disabled={busy}
+        />
 
         <motion.button
           type="button"
@@ -233,24 +248,26 @@ function StatusChip({ trapped }) {
 
 }
 
-function AttackPicker({ value, onChange, disabled }) {
-  const meta = ATTACK_META[value] ?? ATTACK_META.ddos;
+function AttackPicker({ value, scenarioType, onChange, disabled }) {
+  const selected = ATTACKS.find((a) => a.id === value) ?? ATTACKS[0];
+  const meta = ATTACK_META[scenarioType] ?? ATTACK_META.multi_stage;
   return (
-    <label className="inline-flex items-center gap-2 rounded-lg border h-[34px] px-2.5 border-neon-green/30 bg-black/60 text-neon-green/85 font-mono text-[11px] uppercase tracking-[0.22em] focus-within:border-neon-green/60">
+    <label className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-lg border h-[34px] px-2.5 border-neon-green/30 bg-black/60 text-neon-green/85 font-mono text-[11px] uppercase tracking-[0.22em] focus-within:border-neon-green/60">
       <Bug className="h-3.5 w-3.5 text-neon-green/70" />
       <span className="text-neon-green/55">vector</span>
       <select
+        title={selected?.name ?? ''}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className="appearance-none bg-transparent outline-none font-mono text-[11px] uppercase tracking-[0.22em] text-neon-green text-glow-green disabled:opacity-50 cursor-pointer">
-        {ATTACK_TYPES.map((t) =>
-        <option key={t} value={t} className="bg-black text-neon-green">
-            {ATTACK_META[t]?.label ?? t}
+        className="min-w-[130px] max-w-[220px] truncate appearance-none bg-transparent outline-none font-mono text-[11px] uppercase tracking-[0.22em] text-neon-green text-glow-green disabled:opacity-50 cursor-pointer">
+        {ATTACKS.map((attack) =>
+        <option key={attack.id} value={attack.id} className="bg-black text-neon-green">
+            {attack.name}
           </option>
         )}
       </select>
-      <span className="hidden md:inline text-neon-green/45 text-[9.5px]">
+      <span className="hidden xl:inline max-w-[180px] truncate text-neon-green/45 text-[9.5px]" title={selected?.desc ?? ''}>
         · {meta.banner}
       </span>
     </label>);
