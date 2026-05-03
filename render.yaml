@@ -1,30 +1,44 @@
+# Render Blueprint (https://render.com/docs/blueprint-spec)
+# Use a single root-level `services:` list — the legacy `staticSites:` key is invalid on current Render.
+
 services:
   - type: web
     name: sentinel-ai-backend
     runtime: python
+    plan: free
     rootDir: sentinel-ai-backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /api/v1/health
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.0"
       - key: ENVIRONMENT
         value: production
       - key: DEBUG
         value: "false"
       - key: LOG_LEVEL
         value: INFO
+      # After deploy, optionally replace with your static site URL via Dashboard for stricter CORS.
       - key: CORS_ORIGINS
         value: "*"
       - key: COPILOT_PROVIDER
         value: mock
 
-staticSites:
-  - name: sentinel-ai-frontend
+  - type: web
+    name: sentinel-ai-frontend
+    runtime: static
+    plan: free
     rootDir: sentinel-ai-frontend
     buildCommand: npm ci && npm run build
-    publishPath: dist
+    # Relative to rootDir (see https://render.com/docs/monorepo-support)
+    staticPublishPath: ./dist
     envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Baked into the Vite build — follows the backend URL automatically (no hardcoded onrender.com name).
       - key: VITE_API_BASE_URL
-        value: https://sentinel-ai-backend.onrender.com
-      - key: VITE_WS_BASE_URL
-        value: wss://sentinel-ai-backend.onrender.com
+        fromService:
+          type: web
+          name: sentinel-ai-backend
+          envVarKey: RENDER_EXTERNAL_URL

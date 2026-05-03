@@ -28,6 +28,19 @@ if [[ ! -d "$FRONTEND_DIR/node_modules" ]]; then
   (cd "$FRONTEND_DIR" && npm install)
 fi
 
+# Incomplete installs (e.g. interrupted npm) leave lucide-react without dist/esm/icons,
+# which breaks Vite with "Failed to resolve import lucide-react".
+if [[ -d "$FRONTEND_DIR/node_modules" ]] &&
+  [[ ! -f "$FRONTEND_DIR/node_modules/lucide-react/dist/esm/icons/index.mjs" ]]; then
+  echo "[run-dev] lucide-react tree incomplete; reinstalling frontend deps (npm ci)..." >&2
+  (
+    cd "$FRONTEND_DIR"
+    chmod -R u+w node_modules 2>/dev/null || true
+    rm -rf .vite node_modules/.vite node_modules
+    npm ci
+  )
+fi
+
 BACKEND_PID=""
 FRONTEND_PID=""
 
