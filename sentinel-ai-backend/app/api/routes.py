@@ -26,6 +26,7 @@ from app.services.banking_simulation import (
 from app.services.kafka_ingest import normalize_to_event
 from app.services.pipeline import PipelineResult, run_pipeline
 from app.services.reports import build_incident_report, render_markdown
+from app.engine.signatures import get_signature_store
 from app.services.traffic_generator import get_traffic_generator
 from app.services.websocket import manager
 
@@ -351,6 +352,7 @@ async def reset_demo_state() -> DemoResetResponse:
     except RuntimeError:
         pass
     get_alert_store().clear()
+    get_signature_store().clear()
     return DemoResetResponse(
         cancelled_scenarios=cancelled,
         banking_attacks_cleared=True,
@@ -592,6 +594,25 @@ async def ingest_replay(request: Request) -> dict[str, int]:
         except Exception:
             errors += 1
     return {"ingested": ingested, "errors": errors}
+
+
+# ---------------------------------------------------------------------------
+# Signatures (learned fast-path detections)
+# ---------------------------------------------------------------------------
+
+
+@api_router.get("/signatures", tags=["detection"])
+async def list_signatures() -> dict[str, Any]:
+    store = get_signature_store()
+    return {"count": store.count(), "signatures": store.all()}
+
+
+@api_router.delete("/signatures", tags=["detection"])
+async def clear_signatures() -> dict[str, int]:
+    store = get_signature_store()
+    n = store.count()
+    store.clear()
+    return {"cleared": n}
 
 
 # ---------------------------------------------------------------------------

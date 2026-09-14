@@ -45,6 +45,7 @@ class Settings(BaseSettings):
     banking_simulator_interval_seconds: float = Field(default=1.5, gt=0)
     banking_attack_duration_seconds: float = Field(default=14.0, gt=0)
     thresholds_path: str = Field(default="thresholds.json")
+    signatures_path: str = Field(default="signatures.json")
     traffic_enabled: bool = Field(default=True)
     traffic_rate_eps: float = Field(default=12.0, gt=0, le=500)
     traffic_benign_ratio: float = Field(default=0.9, ge=0.0, le=1.0)

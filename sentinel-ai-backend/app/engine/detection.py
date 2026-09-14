@@ -45,6 +45,7 @@ from typing import Iterable, Optional
 
 from app.core.thresholds import get_thresholds
 from app.engine import anomaly as _anomaly
+from app.engine import signatures as _sig
 from app.engine.features import FeatureVector
 from app.models.event import Event, EventType, Severity
 from app.models.threat import Threat, ThreatType
@@ -515,27 +516,29 @@ def _select_threat_type(
     ml = [Signal(s.name, s.fired, s.strength) for s in analysis.signals]
     ml_fired = any(s.fired for s in ml)
 
+    # Score only the *specific* candidates (lexical- or vector-nominated). A
+    # concrete label like "credential_stuffing" is always more useful to an
+    # analyst than the generic "anomaly", so ANOMALY is a fallback used only
+    # when no specific detector fired — even if the ML signals are strong.
     best_type, best_signals, best_score = ThreatType.UNKNOWN, [], 0.0
     for tt in CANDIDATE_THREAT_TYPES:
+        if tt == ThreatType.ANOMALY:
+            continue
         signals = _signals_for(tt, event, cached)
         lex = signals[0]
         vec_name = _VECTOR_FOR.get(tt)
         vec_fired = bool(vec_name) and cached[vec_name].fired
-        if tt == ThreatType.ANOMALY:
-            if not ml_fired:
-                continue
-            score = 0.5 * sum(s.strength for s in ml if s.fired)
-        else:
-            if not lex.fired and not vec_fired:
-                continue
-            other = sum(s.strength for s in signals[1:] if s.fired)
-            score = 0.5 * lex.strength + (1.0 * cached[vec_name].strength if vec_fired else 0.0) + 0.5 * other
+        if not lex.fired and not vec_fired:
+            continue
+        other = sum(s.strength for s in signals[1:] if s.fired)
+        score = 0.5 * lex.strength + (1.0 * cached[vec_name].strength if vec_fired else 0.0) + 0.5 * other
         if score > best_score:
             best_type, best_signals, best_score = tt, signals, score
 
     if best_type == ThreatType.UNKNOWN:
         if event.severity == Severity.INFO and not ml_fired:
             return ThreatType.BENIGN, ml
+        # no specific detector fired — a pure behavioural outlier is an anomaly
         best_type = ThreatType.ANOMALY if ml_fired else ThreatType.UNKNOWN
         best_signals = [cached["frequency"], cached["ip_repetition"], cached["severity_history"]]
 
@@ -600,6 +603,36 @@ def detect(event: Event, context: Optional[DetectionContext] = None) -> Threat:
     ctx.add(event)
 
     analysis = _anomaly.get_engine().analyze(event)
+    indicators = _sig.extract_indicators(event)
+
+    # Fast path: a learned signature identifies this attacker on the first
+    # event, before the behavioural window has to build up.
+    sig_match = _sig.get_signature_store().match(event)
+    if sig_match is not None and event.severity != Severity.INFO:
+        risk = round(max(0.0, min(10.0, sig_match.risk)), 2)
+        severity = _severity_for_risk(risk)
+        ctx.add_threat(sig_match.threat_type)
+        entity, primary_fv = _attribute(event, [Signal("signature_match", True, 1.0)], analysis)
+        breakdown = {"signature": risk}
+        return Threat(
+            event_id=event.id,
+            threat_type=sig_match.threat_type,
+            confidence=sig_match.confidence,
+            risk_score=risk,
+            severity=severity,
+            signals=["signature_match"],
+            correlation=_detect_correlation(sig_match.threat_type, ctx),
+            risk_breakdown=breakdown,
+            entity=entity,
+            features=primary_fv.as_dict(),
+            zscores=analysis.zscores,
+            campaign_id=analysis.campaign.campaign_id if analysis.campaign else None,
+            mitre=list(sig_match.mitre) or list(MITRE.get(sig_match.threat_type, [])),
+            indicators=indicators,
+            signature_id=sig_match.signature_id,
+            matched_by_signature=True,
+        )
+
     threat_type, signals = _select_threat_type(event, ctx, analysis)
 
     breakdown = risk_breakdown(event, signals)
@@ -625,4 +658,5 @@ def detect(event: Event, context: Optional[DetectionContext] = None) -> Threat:
         zscores=analysis.zscores,
         campaign_id=analysis.campaign.campaign_id if analysis.campaign else None,
         mitre=list(MITRE.get(threat_type, [])),
+        indicators=indicators,
     )

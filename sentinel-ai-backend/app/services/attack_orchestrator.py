@@ -406,29 +406,49 @@ class AttackOrchestrator:
             logger.info("attack scenario complete: %s (%s)", scenario.name, run_id)
 
     async def _run_bundle(self, run_id: str, scenario: Scenario) -> None:
-        """Run scenario + honeypot behavior stream concurrently.
+        """Detect first, then engage the honeypot.
 
-        This is the integration point the user asked for:
-          POST /attack trigger
-              -> scenario_event + system_update (existing)
-              -> honeypot_activity + honeypot_analysis (new)
+        Ordering the user asked for:
+          1. run a real detection burst through the ML pipeline so the threat
+             and its alert surface on the dashboard first;
+          2. announce "threat confirmed — engaging honeypot";
+          3. only then start the honeypot behaviour stream, in parallel with
+             the remaining scenario narrative.
+        The pipeline also *learns a signature* from the confirmed threat, so a
+        repeat of this scenario is detected instantly on the first event.
         """
         scenario_task = asyncio.create_task(
             self._run_scenario(run_id, scenario),
             name=f"attack-main:{run_id}",
         )
-        honeypot_task = asyncio.create_task(
-            self._honeypot.run_sequence(attack_type=scenario.name, run_id=run_id),
-            name=f"attack-honeypot:{run_id}",
-        )
+        honeypot_task: Optional[asyncio.Task[None]] = None
         try:
+            detected = await self._detect_first(run_id, scenario)
+            if detected:
+                await self._emit(
+                    {
+                        "type": "scenario_event",
+                        "scenario": scenario.name,
+                        "run_id": run_id,
+                        "stage": 0,
+                        "total_stages": len(scenario.stages),
+                        "severity": "high",
+                        "system": None,
+                        "label": (
+                            f"Threat confirmed ({detected}) — isolating attacker, engaging honeypot"
+                        ),
+                        "ts": _iso(time.time()),
+                    }
+                )
+            honeypot_task = asyncio.create_task(
+                self._honeypot.run_sequence(attack_type=scenario.name, run_id=run_id),
+                name=f"attack-honeypot:{run_id}",
+            )
             results = await asyncio.gather(
                 scenario_task, honeypot_task, return_exceptions=True
             )
             for res in results:
                 if isinstance(res, Exception):
-                                                                             
-                                                      
                     logger.warning(
                         "attack bundle stream failed: scenario=%s run_id=%s err=%r",
                         scenario.name,
@@ -437,11 +457,46 @@ class AttackOrchestrator:
                     )
         except asyncio.CancelledError:
             scenario_task.cancel()
-            honeypot_task.cancel()
+            if honeypot_task is not None:
+                honeypot_task.cancel()
             await asyncio.gather(
-                scenario_task, honeypot_task, return_exceptions=True
+                scenario_task,
+                *(t for t in (honeypot_task,) if t is not None),
+                return_exceptions=True,
             )
             raise
+
+    # Which detectable event kind to drive the detection burst per scenario.
+    _BURST_KIND: dict[str, str] = {
+        "ddos": "ddos",
+        "brute_force": "credential_stuffing",
+        "sql_injection": "sql_injection",
+        "insider": "low_slow_brute_force",
+        "multi_stage": "port_scan",
+    }
+
+    async def _detect_first(self, run_id: str, scenario: Scenario) -> Optional[str]:
+        """Stream a detection burst until an alert is raised. Returns the
+        detected threat type (or None if the window never crossed threshold)."""
+        from app.engine.simulation import AttackSession
+        from app.services.pipeline import run_pipeline
+        from app.services.websocket import manager
+
+        kind = self._BURST_KIND.get(scenario.name, "credential_stuffing")
+        session = AttackSession(kind, seed=abs(hash(run_id)) % 100000)
+        detected: Optional[str] = None
+        for _ in range(14):
+            try:
+                result = await run_pipeline(event=session.next(), explain=False)
+                await manager.broadcast_text(result.model_dump_json())
+            except Exception:
+                logger.exception("detection burst tick failed")
+                break
+            if result.alert_id is not None:
+                detected = result.threat.threat_type.value
+                break
+            await asyncio.sleep(0.12)
+        return detected
 
     async def _execute_stage(
         self,

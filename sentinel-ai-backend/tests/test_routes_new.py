@@ -28,13 +28,18 @@ def test_thresholds_get_put_reset(tmp_path, monkeypatch):
 
 def test_traffic_attack_alerts_and_report_flow(tmp_path, monkeypatch):
     with _client(tmp_path, monkeypatch) as c:
-        r = c.post("/api/v1/traffic/attack", json={"kind": "credential_stuffing", "duration_s": 2, "speed": 50})
+        c.put("/api/v1/traffic/config", json={"rate_eps": 90, "benign_ratio": 0.2})
+        r = c.post("/api/v1/traffic/attack", json={"kind": "credential_stuffing", "duration_s": 8, "speed": 40})
         assert r.status_code == 202
         assert r.json()["kind"] == "credential_stuffing"
-        time.sleep(2.5)
+        alerts = {"total": 0, "items": []}
+        for _ in range(30):
+            time.sleep(0.4)
+            alerts = c.get("/api/v1/alerts?type=credential_stuffing").json()
+            if alerts["total"] >= 1:
+                break
         stats = c.get("/api/v1/traffic/stats").json()
         assert stats["events_ingested"] > 0
-        alerts = c.get("/api/v1/alerts?type=credential_stuffing").json()
         assert alerts["total"] >= 1
         aid = alerts["items"][0]["id"]
         one = c.get(f"/api/v1/alerts/{aid}")

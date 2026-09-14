@@ -99,3 +99,9 @@ class Threat(BaseModel):
     )
     campaign_id: str | None = Field(default=None, description="Distributed-campaign cluster id, if any.")
     mitre: list[str] = Field(default_factory=list, description="MITRE ATT&CK technique ids.")
+    indicators: list[str] = Field(
+        default_factory=list,
+        description="Normalized attacker-controlled fingerprints (subnet:, ua:, endpoint:, port:).",
+    )
+    signature_id: str | None = Field(default=None, description="Learned signature that matched this event, if any.")
+    matched_by_signature: bool = Field(default=False, description="True when a learned signature produced an instant detection.")

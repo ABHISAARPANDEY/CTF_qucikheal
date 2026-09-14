@@ -13,8 +13,10 @@ from app.core.config import get_settings
 from app.core.logger import configure_logging, get_logger
 from app.core.thresholds import configure_path
 from app.engine import anomaly
+from app.engine.detection import reset_default_context
 from app.models.ws_frames import validate_ws_frame
 from app.services.alert_store import init_alert_store
+from app.engine.signatures import init_signature_store
 from app.services.traffic_generator import init_traffic_generator
 from app.services.attack_orchestrator import (
     attack_router,
@@ -54,11 +56,13 @@ async def lifespan(app: FastAPI):
         )
 
     configure_path(settings.thresholds_path)
+    init_signature_store(path=settings.signatures_path)
 
     async def _emit_frame(frame: dict) -> None:
         await manager.broadcast_text(json.dumps(validate_ws_frame(frame)))
 
     init_alert_store(emit=_emit_frame)
+    reset_default_context()
     anomaly.reset_engine()
     anomaly.get_engine().warm_up(n=2000, seed=42)
     logger.info("anomaly engine warmed up (isolation forest fitted on 2000 benign vectors)")

@@ -166,9 +166,10 @@ _UA_POOL: tuple[str, ...] = (
 )
 _BOT_UA_POOL: tuple[str, ...] = (
     "python-requests/2.31.0",
-    "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 Chrome/58.0 Safari/537.36",
+    "python-urllib3/2.2.1",
     "okhttp/4.9.3",
     "Go-http-client/1.1",
+    "curl/8.4.0",
 )
 _BENIGN_ENDPOINTS: tuple[tuple[str, float], ...] = (
     ("/api/login", 0.18), ("/api/accounts", 0.22), ("/api/transactions", 0.25),

@@ -35,6 +35,7 @@ from app.services.ai_copilot import (
     generate_explanation,
 )
 from app.services.alert_store import get_alert_store
+from app.engine.signatures import get_signature_store
 
 
 class PipelineResult(BaseModel):
@@ -91,6 +92,10 @@ async def run_pipeline(
     response = respond(actions)
 
     alert = get_alert_store().ingest(threat, actions, sample_message=event.message)
+    # Learn a signature from every confirmed (alert-raising) detection so the
+    # next occurrence of this attacker fingerprint is flagged instantly.
+    if alert is not None and not threat.matched_by_signature:
+        get_signature_store().learn(threat, event)
 
     if explain:
         explanation = generate_explanation(
