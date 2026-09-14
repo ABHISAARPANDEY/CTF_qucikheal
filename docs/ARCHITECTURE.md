@@ -73,6 +73,44 @@ This payload is consumed by dashboard panels (risk meter, threat feed, actions, 
 
 ---
 
+## 3b) Detection Heuristics
+
+Detection is a **vote across independent signals**; no single rule decides. Static per-IP thresholds are only one voice.
+
+### Behavioural features (`engine/features.py`)
+
+Every event is indexed into three rolling 300 s windows — by source IP, by username, by /24 subnet — and each view yields an 11-dimensional `FeatureVector`:
+
+`fail_ratio, attempts_per_min, distinct_users, distinct_ips, distinct_ports, port_sequentiality, inter_arrival_mean, inter_arrival_std, ua_entropy, hour_of_day_dev, endpoint_diversity`
+
+### Scorers (`engine/anomaly.py`)
+
+| Scorer | Method | Signal | Catches |
+|---|---|---|---|
+| `BaselineScorer` | Welford online mean/variance per feature over the *population* of entities of a type; z-score of the current vector | `behavioral_zscore` | "this IP/user looks unlike a typical one" — works for never-seen attacker IPs |
+| `IsolationForestScorer` | scikit-learn `IsolationForest` fitted at startup on 2 000 benign vectors, refit on demand from the live window | `isolation_forest` | novel / zero-day shapes with no rule |
+| `CampaignClusterer` | groups events by `(user_agent, endpoint)` fingerprint; fires when one fingerprint spans ≥ N IPs across ≥ M subnets **with a high failure ratio** | `distributed_campaign` | residential-proxy-pool credential stuffing where no single IP crosses any threshold |
+
+### Vector detectors (`engine/detection.py`)
+
+Read only the feature vectors, never the message text:
+
+- `port_scan` — `distinct_ports ≥ 10` or sequential-port ratio ≥ 0.7.
+- `credential_stuffing` — ≥ 8 distinct usernames with fail ratio ≥ 0.8 from one IP, one /24, **or one campaign fingerprint**.
+- `low_slow_brute` — per-*user* view: ≥ 5 distinct IPs targeting one account, fail ratio ≥ 0.8, mean gap ≥ 5 s. Fires with every IP below the legacy per-IP threshold.
+
+### Risk budget
+
+`risk = severity 1.5 + frequency 1.0 + repetition 1.0 + vector 2.0 + behavioral_zscore 2.0 + isolation_forest 1.5 + distributed_campaign 1.0` (clamped to 10). Every `Threat` carries `risk_breakdown` so the UI can show why.
+
+### Alerting
+
+`services/alert_store.py` suppresses threats below `alert_min_risk` and de-duplicates by `(entity, threat_type)` within `dedupe_window_s`, so one campaign yields one alert with a growing `count`. Thresholds live in `core/thresholds.py` and are editable at runtime.
+
+### Evaluation
+
+`python -m scripts.eval_detection` replays 5 000 labelled events; see `docs/JUDGE_PITCH.md` §6b for current numbers.
+
 ## 4) Realtime Messaging Design
 
 ### 4.1 WebSocket Channel
