@@ -53,6 +53,11 @@ const INITIAL_STATE = Object.freeze({
   systemUpdates: {},
   honeypotActivities: [],
   honeypotAnalyses: [],
+  eventsMeta: {},
+  alerts: {},
+  stats: null,
+  statsHistory: [],
+  config: null,
   status: 'reconnecting'
 });
 
@@ -118,6 +123,11 @@ export function RealtimeProvider({ children, ...wsOptions }) {
       systemUpdates: data.systemUpdates ?? {},
       honeypotActivities: data.honeypotActivities ?? [],
       honeypotAnalyses: data.honeypotAnalyses ?? [],
+      eventsMeta: data.eventsMeta ?? {},
+      alerts: data.alerts ?? {},
+      stats: data.stats ?? null,
+      statsHistory: data.statsHistory ?? [],
+      config: data.config ?? null,
       status
     });
   }, [data, status, store]);

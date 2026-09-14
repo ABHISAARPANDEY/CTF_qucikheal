@@ -139,3 +139,64 @@ export async function resetDemoState() {
   }
   return res.json();
 }
+
+// ---------------------------------------------------------------------------
+// Detection / alerts / thresholds / traffic / reports
+// ---------------------------------------------------------------------------
+
+async function request(path, { method = 'GET', body, headers = {}, text = false } = {}) {
+  const res = await fetch(withApiBase(`${API_PREFIX}${path}`), {
+    method,
+    headers: body != null ? { 'content-type': 'application/json', ...headers } : headers,
+    body: body != null ? JSON.stringify(body) : undefined
+  });
+  if (!res.ok) {
+    const detail = await res.text().catch(() => '');
+    throw new Error(`${method} ${path} ${res.status}: ${detail}`);
+  }
+  if (res.status === 204) return null;
+  return text ? res.text() : res.json();
+}
+
+const qs = (params) => {
+  const u = new URLSearchParams();
+  for (const [k, v] of Object.entries(params ?? {})) {
+    if (v != null && v !== '') u.set(k, String(v));
+  }
+  const str = u.toString();
+  return str ? `?${str}` : '';
+};
+
+export const getThresholds = () => request('/config/thresholds');
+export const putThresholds = (patch) => request('/config/thresholds', { method: 'PUT', body: patch });
+export const resetThresholds = () => request('/config/thresholds/reset', { method: 'POST' });
+
+export const listAlerts = (params) => request(`/alerts${qs(params)}`);
+export const getAlert = (id) => request(`/alerts/${encodeURIComponent(id)}`);
+export const patchAlert = (id, patch) => request(`/alerts/${encodeURIComponent(id)}`, { method: 'PATCH', body: patch });
+export const alertsSummary = () => request('/alerts/summary');
+
+export const trafficAttack = ({ kind, duration_s = 20, speed = 1, seed } = {}) =>
+  request('/traffic/attack', { method: 'POST', body: { kind, duration_s, speed, seed } });
+export const trafficStop = () => request('/traffic/attack', { method: 'DELETE' });
+export const trafficStats = () => request('/traffic/stats');
+export const trafficConfig = (cfg) => request('/traffic/config', { method: 'PUT', body: cfg });
+
+export const detectionStatus = () => request('/detection/status');
+export const detectionCampaigns = () => request('/detection/campaigns');
+export const detectionEntity = (type, key) =>
+  request(`/detection/entity/${encodeURIComponent(type)}/${encodeURIComponent(key)}`);
+export const detectionRetrain = () => request('/detection/retrain', { method: 'POST' });
+
+export const incidentReport = (since) => request(`/reports/incident${qs({ since })}`);
+export const incidentReportMarkdown = (since) =>
+  request(`/reports/incident${qs({ since })}`, { headers: { accept: 'text/markdown' }, text: true });
+
+export const SESSION_KINDS = [
+  'port_scan',
+  'credential_stuffing',
+  'low_slow_brute_force',
+  'brute_force',
+  'ddos',
+  'sql_injection'
+];

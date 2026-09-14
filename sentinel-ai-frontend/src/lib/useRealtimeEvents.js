@@ -1,12 +1,32 @@
 import { useEffect, useRef, useState } from 'react';
 import { buildTelemetryEntry, isSideChannelPayload } from './telemetry';
 import {
+  isValidAlertFrame,
+  isValidConfigFrame,
   isValidHoneypotActivity,
   isValidHoneypotAnalysis,
   isValidPipelinePayload,
   isValidScenarioEvent,
+  isValidStatsFrame,
   isValidSystemUpdate
 } from './wsValidators';
+import { getThresholds, listAlerts } from './api';
+
+const MAX_ALERTS = 1000;
+const MAX_STATS_HISTORY = 90;
+const MAX_META = 2000;
+
+export function mergeAlert(alerts, alert) {
+  const next = { ...alerts, [alert.id]: alert };
+  const keys = Object.keys(next);
+  if (keys.length > MAX_ALERTS) {
+    keys
+      .sort((a, b) => Date.parse(next[a].first_seen ?? 0) - Date.parse(next[b].first_seen ?? 0))
+      .slice(0, keys.length - MAX_ALERTS)
+      .forEach((k) => delete next[k]);
+  }
+  return next;
+}
 
 
 
@@ -41,10 +61,11 @@ import {
 
 export function useRealtimeEvents({
   url = 'ws://localhost:8000/ws/live',
-  maxEvents = 50
+  maxEvents = 500
 } = {}) {
   const [data, setData] = useState(() => ({
     events: [],
+    eventsMeta: {},
     currentThreat: null,
     riskScore: null,
     actions: [],
@@ -53,7 +74,11 @@ export function useRealtimeEvents({
     scenarioEvents: [],
     systemUpdates: {},
     honeypotActivities: [],
-    honeypotAnalyses: []
+    honeypotAnalyses: [],
+    alerts: {},
+    stats: null,
+    statsHistory: [],
+    config: null
   }));
   const [status, setStatus] = useState('reconnecting');
 
@@ -114,6 +139,22 @@ export function useRealtimeEvents({
       ws.onopen = () => {
         attemptsRef.current = 0;
         setStatus('connected');
+        // Hydrate slices that have REST sources so a fresh tab isn't empty.
+        listAlerts({ limit: 500 })
+          .then((res) => {
+            if (cancelledRef.current) return;
+            setData((prev) => {
+              let alerts = prev.alerts;
+              for (const a of res.items ?? []) alerts = mergeAlert(alerts, a);
+              return { ...prev, alerts };
+            });
+          })
+          .catch(() => void 0);
+        getThresholds()
+          .then((cfg) => {
+            if (!cancelledRef.current) setData((prev) => ({ ...prev, config: cfg }));
+          })
+          .catch(() => void 0);
       };
 
       ws.onmessage = (event) => {
@@ -128,6 +169,18 @@ export function useRealtimeEvents({
         if (!payload || typeof payload !== 'object') return;
 
         setData((prev) => {
+          if (isValidAlertFrame(payload)) {
+            return { ...prev, alerts: mergeAlert(prev.alerts, payload.alert) };
+          }
+          if (isValidStatsFrame(payload)) {
+            const statsHistory = [...prev.statsHistory, { t: Date.now(), eps: payload.data.events_per_sec ?? 0 }]
+              .slice(-MAX_STATS_HISTORY);
+            return { ...prev, stats: payload.data, statsHistory };
+          }
+          if (isValidConfigFrame(payload)) {
+            return { ...prev, config: payload.thresholds };
+          }
+
           const isPipeline = isValidPipelinePayload(payload);
           const isSide = isSideChannelPayload(payload);
           const isScenario = isValidScenarioEvent(payload);
@@ -207,8 +260,30 @@ export function useRealtimeEvents({
           [incomingEvent, ...prev.events].slice(0, maxEvents) :
           prev.events;
 
+          let eventsMeta = prev.eventsMeta;
+          if (incomingEvent?.id && payload.threat) {
+            eventsMeta = {
+              ...eventsMeta,
+              [incomingEvent.id]: {
+                threat_type: payload.threat.threat_type,
+                risk_score: payload.threat.risk_score,
+                severity: payload.threat.severity,
+                signals: payload.threat.signals ?? [],
+                alert_id: payload.alert_id ?? null,
+                label: incomingEvent.label ?? null,
+                ts: incomingEvent.timestamp
+              }
+            };
+            const keys = Object.keys(eventsMeta);
+            if (keys.length > MAX_META) {
+              for (const k of keys.slice(0, keys.length - MAX_META)) delete eventsMeta[k];
+            }
+          }
+
           return {
+            ...prev,
             events: updatedEvents,
+            eventsMeta,
             currentThreat: payload.threat ?? prev.currentThreat,
             riskScore:
             typeof payload.threat?.risk_score === 'number' ?

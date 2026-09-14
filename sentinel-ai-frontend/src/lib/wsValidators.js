@@ -69,3 +69,27 @@ export function isValidPipelinePayload(payload) {
   if (!isObject(payload)) return false;
   return payload.event != null || payload.threat != null || payload.actions != null;
 }
+
+export function isValidAlertFrame(payload) {
+  if (!isObject(payload)) return false;
+  if (payload.type !== 'alert_new' && payload.type !== 'alert_update') return false;
+  const a = payload.alert;
+  return (
+    isObject(a) &&
+    isString(a.id) &&
+    isString(a.threat_type) &&
+    isString(a.severity) &&
+    isNumber(a.risk) &&
+    isObject(a.entity)
+  );
+}
+
+export function isValidStatsFrame(payload) {
+  if (!isObject(payload) || payload.type !== 'stats') return false;
+  return isObject(payload.data) && isNumber(payload.data.events_ingested);
+}
+
+export function isValidConfigFrame(payload) {
+  if (!isObject(payload) || payload.type !== 'config_update') return false;
+  return isObject(payload.thresholds);
+}

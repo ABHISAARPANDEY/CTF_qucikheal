@@ -62,3 +62,21 @@ describe('wsValidators', () => {
     expect(isValidPipelinePayload({ type: 'scenario_event' })).toBe(false);
   });
 });
+
+import { isValidAlertFrame, isValidConfigFrame, isValidStatsFrame } from './wsValidators';
+
+describe('new frame validators', () => {
+  it('accepts alert frames and rejects malformed ones', () => {
+    const good = { type: 'alert_new', alert: { id: 'a', threat_type: 'port_scan', severity: 'high', risk: 6.1, entity: { type: 'ip', key: '1.1.1.1' } } };
+    expect(isValidAlertFrame(good)).toBe(true);
+    expect(isValidAlertFrame({ ...good, type: 'alert_update' })).toBe(true);
+    expect(isValidAlertFrame({ type: 'alert_new', alert: { id: 'a' } })).toBe(false);
+    expect(isValidAlertFrame({ type: 'stats' })).toBe(false);
+  });
+  it('accepts stats and config frames', () => {
+    expect(isValidStatsFrame({ type: 'stats', data: { events_ingested: 3 } })).toBe(true);
+    expect(isValidStatsFrame({ type: 'stats', data: {} })).toBe(false);
+    expect(isValidConfigFrame({ type: 'config_update', thresholds: { alert_min_risk: 4 } })).toBe(true);
+    expect(isValidConfigFrame({ type: 'config_update' })).toBe(false);
+  });
+});

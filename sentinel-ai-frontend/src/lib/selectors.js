@@ -31,3 +31,18 @@ export const selectStatus = (s) => s.status;
 
 
 export const selectNewestEvent = (s) => s.events[0] ?? null;
+
+export const selectEventsMeta = (s) => s.eventsMeta ?? {};
+export const selectAlerts = (s) => s.alerts ?? {};
+export const selectStats = (s) => s.stats;
+export const selectStatsHistory = (s) => s.statsHistory ?? [];
+export const selectConfig = (s) => s.config;
+
+let _alertListCache = { src: null, list: [] };
+export const selectAlertList = (s) => {
+  const src = s.alerts ?? {};
+  if (_alertListCache.src === src) return _alertListCache.list;
+  const list = Object.values(src).sort((a, b) => Date.parse(b.last_seen ?? 0) - Date.parse(a.last_seen ?? 0));
+  _alertListCache = { src, list };
+  return list;
+};
