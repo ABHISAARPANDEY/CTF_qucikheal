@@ -111,6 +111,8 @@ _THREAT_TYPE_LABEL: dict[ThreatType, str] = {
     ThreatType.INSIDER: "suspicious insider activity",
     ThreatType.ANOMALY: "anomalous activity",
     ThreatType.UNKNOWN: "unclassified suspicious activity",
+    ThreatType.CREDENTIAL_STUFFING: "credential stuffing campaign",
+    ThreatType.BENIGN: "benign activity",
 }
 
 

@@ -33,6 +33,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Optional
 
+from app.core.thresholds import get_thresholds
 from app.engine.detection import DetectionContext, get_default_context
 from app.models.action import Action, ActionStatus, ActionType, Priority
 from app.models.threat import Threat, ThreatType
@@ -41,11 +42,6 @@ from app.models.threat import Threat, ThreatType
                                                                         
                                                                         
 
-HIGH_RISK_THRESHOLD: float = 7.0
-LOW_RISK_THRESHOLD:  float = 3.0
-
-HIGH_CONFIDENCE_THRESHOLD: float = 0.75
-LOW_CONFIDENCE_THRESHOLD:  float = 0.40
 
                                                                    
                                                     
@@ -80,9 +76,10 @@ def _resolve_tier(risk_score: float, confidence: float) -> str:
             positive or a non-event; respond conservatively.
     MEDIUM: everything else.
     """
-    if risk_score >= HIGH_RISK_THRESHOLD and confidence >= HIGH_CONFIDENCE_THRESHOLD:
+    t = get_thresholds()
+    if risk_score >= t.high_risk and confidence >= t.high_confidence:
         return "high"
-    if risk_score < LOW_RISK_THRESHOLD or confidence < LOW_CONFIDENCE_THRESHOLD:
+    if risk_score < t.low_risk or confidence < t.low_confidence:
         return "low"
     return "medium"
 
@@ -348,6 +345,11 @@ def decide(
     """
     ctx = context or get_default_context()
     resolved_target = target or f"threat:{threat.id}"
+
+    if threat.threat_type == ThreatType.BENIGN:
+        return [Action(threat_id=threat.id, action_type=ActionType.LOG_ONLY,
+                       target=resolved_target, status=ActionStatus.PENDING,
+                       priority=Priority.P3, reason="Benign traffic — logged for baseline")]
 
                                                       
     tier = _resolve_tier(threat.risk_score, threat.confidence)

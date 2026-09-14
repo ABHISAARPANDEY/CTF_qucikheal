@@ -43,6 +43,9 @@ from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Iterable, Optional
 
+from app.core.thresholds import get_thresholds
+from app.engine import anomaly as _anomaly
+from app.engine.features import FeatureVector
 from app.models.event import Event, EventType, Severity
 from app.models.threat import Threat, ThreatType
 
@@ -213,6 +216,7 @@ _KEYWORDS: dict[ThreatType, tuple[str, ...]] = {
     ThreatType.DDOS:                  ("flood", "ddos", "amplification", "packets/sec", "gbps"),
     ThreatType.PORT_SCAN:             ("port scan", "nmap", "syn scan"),
     ThreatType.BRUTE_FORCE:           ("brute", "failed login", "failed auth"),
+    ThreatType.CREDENTIAL_STUFFING:   ("credential stuffing", "stuffing"),
     ThreatType.SQL_INJECTION:         ("sqli", "sql injection", "union select", "or '1'='1", "drop table", "' or 'a'='a"),
     ThreatType.MALWARE:               ("malware", "trojan", "ransomware", "virus"),
     ThreatType.PHISHING:              ("phish", "credential harvesting", "spoofed sender"),
@@ -221,16 +225,33 @@ _KEYWORDS: dict[ThreatType, tuple[str, ...]] = {
     ThreatType.LATERAL_MOVEMENT:      ("psexec", "wmic remote", "smb relay", "lateral"),
 }
 
-                                                                       
-                                                          
 _TYPE_HINT: dict[ThreatType, EventType] = {
     ThreatType.DDOS:                  EventType.NETWORK,
     ThreatType.PORT_SCAN:             EventType.NETWORK,
     ThreatType.BRUTE_FORCE:           EventType.AUTH,
+    ThreatType.CREDENTIAL_STUFFING:   EventType.AUTH,
     ThreatType.SQL_INJECTION:         EventType.INTRUSION,
     ThreatType.MALWARE:               EventType.MALWARE,
     ThreatType.PRIVILEGE_ESCALATION:  EventType.PROCESS,
 }
+
+MITRE: dict[ThreatType, list[str]] = {
+    ThreatType.BRUTE_FORCE:          ["T1110.001"],
+    ThreatType.CREDENTIAL_STUFFING:  ["T1110.004"],
+    ThreatType.PORT_SCAN:            ["T1046", "T1595.001"],
+    ThreatType.DDOS:                 ["T1498"],
+    ThreatType.SQL_INJECTION:        ["T1190"],
+    ThreatType.MALWARE:              ["T1204"],
+    ThreatType.PHISHING:             ["T1566"],
+    ThreatType.DATA_EXFILTRATION:    ["T1041"],
+    ThreatType.PRIVILEGE_ESCALATION: ["T1068"],
+    ThreatType.LATERAL_MOVEMENT:     ["T1021"],
+    ThreatType.INSIDER:              ["T1078"],
+}
+
+
+def _non_info(events: list[Event]) -> list[Event]:
+    return [e for e in events if e.severity != Severity.INFO]
 
 
 def _signal_lexical(event: Event, threat_type: ThreatType) -> Signal:
@@ -238,70 +259,95 @@ def _signal_lexical(event: Event, threat_type: ThreatType) -> Signal:
     keywords = _KEYWORDS.get(threat_type, ())
     text = event.message.lower()
     matches = sum(1 for k in keywords if k in text)
+    if matches == 0:
+        return Signal("lexical", False, 0.0)
     type_hint = _TYPE_HINT.get(threat_type)
     type_match = type_hint is not None and event.event_type == type_hint
-
-    if matches == 0 and not type_match:
-        return Signal("lexical", False, 0.0)
-
-                                                                   
     strength = min(1.0, matches * 0.40 + (0.30 if type_match else 0.0))
     return Signal("lexical", True, round(strength, 2))
 
 
 def _signal_frequency(event: Event, ctx: DetectionContext) -> Signal:
-    """How many events of the same EventType occurred in the window?"""
-    n = len(ctx.events_for_type(event.event_type))
+    """How many non-informational events of the same EventType in the window?"""
+    n = len(_non_info(ctx.events_for_type(event.event_type)))
     if n < FREQ_LOW_THRESHOLD:
         return Signal("frequency", False, 0.0)
     span = max(1, FREQ_HIGH_THRESHOLD - FREQ_LOW_THRESHOLD)
-    strength = min(1.0, (n - FREQ_LOW_THRESHOLD) / span)
-    return Signal("frequency", True, round(strength, 2))
+    return Signal("frequency", True, round(min(1.0, (n - FREQ_LOW_THRESHOLD) / span), 2))
 
 
 def _signal_ip_repetition(event: Event, ctx: DetectionContext) -> Signal:
-    """Same source IP repeating events (brute-force / scanning fingerprint)."""
-    ip = str(event.source_ip)
-    n = len(ctx.events_for_ip(ip))
+    """Same source IP repeating non-informational events."""
+    n = len(_non_info(ctx.events_for_ip(str(event.source_ip))))
     if n < SAME_IP_FOR_REPETITION:
         return Signal("ip_repetition", False, 0.0)
-    strength = min(1.0, n / 20.0)                                       
-    return Signal("ip_repetition", True, round(strength, 2))
+    return Signal("ip_repetition", True, round(min(1.0, n / 20.0), 2))
 
 
 def _signal_distributed_sources(event: Event, ctx: DetectionContext) -> Signal:
     """Many distinct source IPs hitting the same event type (DDoS)."""
-    type_events = ctx.events_for_type(event.event_type)
-    distinct_ips = {str(e.source_ip) for e in type_events}
+    distinct_ips = {str(e.source_ip) for e in _non_info(ctx.events_for_type(event.event_type))}
     n = len(distinct_ips)
     if n < DISTINCT_IPS_FOR_DISTRIBUTED:
         return Signal("distributed_sources", False, 0.0)
-    strength = min(1.0, n / 20.0)
-    return Signal("distributed_sources", True, round(strength, 2))
+    return Signal("distributed_sources", True, round(min(1.0, n / 20.0), 2))
 
 
 def _signal_severity_history(event: Event, ctx: DetectionContext) -> Signal:
-    """Has the recent severity baseline been climbing? (anomaly proxy)."""
+    """Has the recent severity baseline been climbing?"""
     recent = ctx.events_in_window()[-10:]
     if len(recent) < 3:
         return Signal("severity_history", False, 0.0)
     avg = sum(SEVERITY_WEIGHT[e.severity] for e in recent) / len(recent)
     if avg < 1.5:
         return Signal("severity_history", False, 0.0)
-                        
-    strength = min(1.0, max(0.0, (avg - 1.5) / 2.5))
-    return Signal("severity_history", True, round(strength, 2))
+    return Signal("severity_history", True, round(min(1.0, max(0.0, (avg - 1.5) / 2.5)), 2))
 
 
-                                                                        
+# ---- vector detectors (read FeatureVectors, never the message) ------------
 
-                                                                    
-                                                       
+
+def _signal_port_scan(ip_fv: FeatureVector) -> Signal:
+    t = get_thresholds()
+    by_count = ip_fv.distinct_ports / t.port_scan_min_ports
+    by_seq = ip_fv.port_sequentiality / t.port_scan_seq if t.port_scan_seq > 0 else 0.0
+    fired = ip_fv.distinct_ports >= t.port_scan_min_ports or (
+        ip_fv.distinct_ports >= 3 and ip_fv.port_sequentiality >= t.port_scan_seq
+    )
+    strength = min(1.0, max(by_count, by_seq) / 1.5) if fired else 0.0
+    return Signal("port_scan", fired, round(strength, 2))
+
+
+def _signal_credential_stuffing(ip_fv: FeatureVector, subnet_fv: FeatureVector) -> Signal:
+    t = get_thresholds()
+    best = max(ip_fv.distinct_users, subnet_fv.distinct_users)
+    fr = ip_fv.fail_ratio if ip_fv.distinct_users >= subnet_fv.distinct_users else subnet_fv.fail_ratio
+    fired = best >= t.stuffing_min_users and fr >= t.stuffing_fail_ratio
+    strength = min(1.0, best / (2.0 * t.stuffing_min_users)) if fired else 0.0
+    return Signal("credential_stuffing", fired, round(strength, 2))
+
+
+def _signal_low_slow_brute(user_fv: FeatureVector | None) -> Signal:
+    if user_fv is None:
+        return Signal("low_slow_brute", False, 0.0)
+    t = get_thresholds()
+    fired = (
+        user_fv.distinct_ips >= t.lowslow_min_ips
+        and user_fv.fail_ratio >= t.lowslow_fail_ratio
+        and user_fv.inter_arrival_mean >= t.lowslow_min_gap_s
+    )
+    strength = min(1.0, user_fv.distinct_ips / (2.0 * t.lowslow_min_ips)) if fired else 0.0
+    return Signal("low_slow_brute", fired, round(strength, 2))
+
+
+# ---- correlation ----------------------------------------------------------
+
 KILL_CHAIN_PATTERNS: tuple[tuple[ThreatType, ...], ...] = (
     (ThreatType.BRUTE_FORCE, ThreatType.PRIVILEGE_ESCALATION, ThreatType.DATA_EXFILTRATION),
     (ThreatType.PORT_SCAN, ThreatType.SQL_INJECTION, ThreatType.DATA_EXFILTRATION),
     (ThreatType.PHISHING, ThreatType.MALWARE, ThreatType.LATERAL_MOVEMENT),
     (ThreatType.BRUTE_FORCE, ThreatType.LATERAL_MOVEMENT, ThreatType.DATA_EXFILTRATION),
+    (ThreatType.PORT_SCAN, ThreatType.CREDENTIAL_STUFFING, ThreatType.PRIVILEGE_ESCALATION),
 )
 
 
@@ -316,25 +362,19 @@ def _is_ordered_subsequence(pattern: tuple[ThreatType, ...], history: list[Threa
     return False
 
 
-def _detect_correlation(
-    current: ThreatType, ctx: DetectionContext
-) -> Optional[str]:
+def _detect_correlation(current: ThreatType, ctx: DetectionContext) -> Optional[str]:
     """Inspect the recent threat history for kill-chain or sustained patterns."""
-    history = ctx.recent_threat_types(n=8) + [current]
-
+    history = [t for t in ctx.recent_threat_types(n=8) if t != ThreatType.BENIGN] + [current]
     for pattern in KILL_CHAIN_PATTERNS:
         if _is_ordered_subsequence(pattern, history):
             return "multi_stage_attack"
-
-                                                                         
     tail = history[-3:]
-    if len(tail) == 3 and len(set(tail)) == 1 and tail[0] != ThreatType.UNKNOWN:
+    if len(tail) == 3 and len(set(tail)) == 1 and tail[0] not in (ThreatType.UNKNOWN, ThreatType.BENIGN):
         return "sustained_attack"
-
     return None
 
 
-                                                                        
+# ---- scoring --------------------------------------------------------------
 
 
 def _signal_strength(signals: list[Signal], name: str) -> float:
@@ -345,60 +385,66 @@ def _signal_strength(signals: list[Signal], name: str) -> float:
     return 0.0
 
 
+RISK_BUDGET: dict[str, float] = {
+    "severity": 1.5,
+    "frequency": 1.0,
+    "repetition": 1.0,
+    "vector": 2.0,
+    "behavioral_zscore": 2.0,
+    "isolation_forest": 1.5,
+    "distributed_campaign": 1.0,
+}
+
+
+def risk_breakdown(event: Event, signals: list[Signal]) -> dict[str, float]:
+    """Per-factor risk contributions; values sum to the total risk (≤ 10)."""
+    b = RISK_BUDGET
+    parts = {
+        "severity": SEVERITY_WEIGHT[event.severity] / 4.0 * b["severity"],
+        "frequency": _signal_strength(signals, "frequency") * b["frequency"],
+        "repetition": max(
+            _signal_strength(signals, "ip_repetition"),
+            _signal_strength(signals, "distributed_sources"),
+        ) * b["repetition"],
+        "vector": max(
+            _signal_strength(signals, "port_scan"),
+            _signal_strength(signals, "credential_stuffing"),
+            _signal_strength(signals, "low_slow_brute"),
+            _signal_strength(signals, "lexical") * 0.75,
+        ) * b["vector"],
+        "behavioral_zscore": _signal_strength(signals, "behavioral_zscore") * b["behavioral_zscore"],
+        "isolation_forest": _signal_strength(signals, "isolation_forest") * b["isolation_forest"],
+        "distributed_campaign": _signal_strength(signals, "distributed_campaign") * b["distributed_campaign"],
+    }
+    return {k: round(v, 2) for k, v in parts.items()}
+
+
 def calculate_risk(
     event: Event,
     context: Optional[DetectionContext] = None,
     signals: Optional[list[Signal]] = None,
 ) -> float:
-    """Compute risk in [0, 10] from severity, frequency, repetition, anomaly.
-
-    Factor budget (max contribution):
-        severity         → 3.2 pts (event's own severity)
-        frequency        → 3.0 pts (volume of similar events in window)
-        repetition       → 2.0 pts (same IP repeats OR distributed sources)
-        anomaly          → 2.0 pts (severity baseline climbing)
-
-    Total is clamped to [0, 10].
-    """
-    _ = context                                                            
-    signals = signals or []
-
-    severity_factor   = SEVERITY_WEIGHT[event.severity] * 0.8               
-    frequency_factor  = _signal_strength(signals, "frequency") * 3.0         
-    repetition_factor = max(
-        _signal_strength(signals, "ip_repetition"),
-        _signal_strength(signals, "distributed_sources"),
-    ) * 2.0                                                                  
-    anomaly_factor    = _signal_strength(signals, "severity_history") * 2.0         
-
-    total = severity_factor + frequency_factor + repetition_factor + anomaly_factor
+    """Composite risk in [0, 10] — the sum of :func:`risk_breakdown`."""
+    _ = context
+    total = sum(risk_breakdown(event, signals or []).values())
     return round(max(0.0, min(10.0, total)), 2)
 
 
 def calculate_confidence(signals: list[Signal]) -> float:
-    """Compute confidence in [0, 1] from how many signals align and how strongly.
-
-    Scheme:
-        base 0.30
-        +0.18 per fully-strong fired signal (sums of strengths)
-        +0.05 alignment bonus per *additional* fired signal beyond the first
-    """
+    """Confidence in [0, 1] from how many signals align and how strongly."""
     fired = [s for s in signals if s.fired]
     if not fired:
-        return 0.30                                                        
+        return 0.30
     total_strength = sum(s.strength for s in fired)
     alignment_bonus = 0.05 * (len(fired) - 1)
-    confidence = 0.30 + 0.18 * total_strength + alignment_bonus
-    return round(max(0.0, min(1.0, confidence)), 2)
+    return round(max(0.0, min(1.0, 0.30 + 0.18 * total_strength + alignment_bonus)), 2)
 
 
-                                                                        
-
-                                                                       
 CANDIDATE_THREAT_TYPES: tuple[ThreatType, ...] = (
     ThreatType.DDOS,
     ThreatType.PORT_SCAN,
     ThreatType.BRUTE_FORCE,
+    ThreatType.CREDENTIAL_STUFFING,
     ThreatType.SQL_INJECTION,
     ThreatType.MALWARE,
     ThreatType.PHISHING,
@@ -408,151 +454,120 @@ CANDIDATE_THREAT_TYPES: tuple[ThreatType, ...] = (
     ThreatType.ANOMALY,
 )
 
+# Which vector signal can *nominate* a threat type without any keyword match.
+_VECTOR_FOR: dict[ThreatType, str] = {
+    ThreatType.PORT_SCAN: "port_scan",
+    ThreatType.CREDENTIAL_STUFFING: "credential_stuffing",
+    ThreatType.BRUTE_FORCE: "low_slow_brute",
+}
 
-def _signals_for(
-    threat_type: ThreatType,
-    event: Event,
-    ctx: DetectionContext,
-    cached: dict[str, Signal],
-) -> list[Signal]:
-    """Build the signal set relevant to a candidate threat type.
 
-    Lexical is per-type; the rest are cached across candidates because
-    they're event-wide (frequency, distributed_sources, severity_history)
-    or IP-wide (ip_repetition).
-    """
-    signals: list[Signal] = [_signal_lexical(event, threat_type)]
-    signals.append(cached["frequency"])
+def _signals_for(threat_type: ThreatType, event: Event, cached: dict[str, Signal]) -> list[Signal]:
+    signals: list[Signal] = [_signal_lexical(event, threat_type), cached["frequency"]]
     if threat_type == ThreatType.DDOS:
         signals.append(cached["distributed_sources"])
     elif threat_type in (
-        ThreatType.BRUTE_FORCE,
-        ThreatType.SQL_INJECTION,
-        ThreatType.PORT_SCAN,
-        ThreatType.PRIVILEGE_ESCALATION,
+        ThreatType.BRUTE_FORCE, ThreatType.SQL_INJECTION, ThreatType.PORT_SCAN,
+        ThreatType.PRIVILEGE_ESCALATION, ThreatType.CREDENTIAL_STUFFING,
     ):
         signals.append(cached["ip_repetition"])
+    vec = _VECTOR_FOR.get(threat_type)
+    if vec:
+        signals.append(cached[vec])
     signals.append(cached["severity_history"])
     return signals
 
 
-def _fallback_threat_type(event: Event) -> ThreatType:
-    """Map by event_type when no lexical rule matches anything."""
-    if event.event_type == EventType.NETWORK:
-        return ThreatType.PORT_SCAN if "scan" in event.message.lower() else ThreatType.ANOMALY
-    if event.event_type == EventType.AUTH:        return ThreatType.BRUTE_FORCE
-    if event.event_type == EventType.INTRUSION:   return ThreatType.SQL_INJECTION
-    if event.event_type == EventType.MALWARE:     return ThreatType.MALWARE
-    if event.event_type == EventType.ANOMALY:     return ThreatType.ANOMALY
-    return ThreatType.UNKNOWN
-
-
 def _select_threat_type(
-    event: Event, ctx: DetectionContext
+    event: Event, ctx: DetectionContext, analysis: _anomaly.AnalysisResult
 ) -> tuple[ThreatType, list[Signal]]:
-    """Score every candidate; return (winner, its signal set).
-
-    Scoring rule for each candidate:
-        score = 0.5 × lexical_strength + 0.5 × Σ(other_signal_strengths)
-
-    Lexical match dominates direction; context signals break ties and
-    promote borderline cases (e.g., low-keyword event riding on a strong
-    frequency or repetition fingerprint).
-    """
+    """Score every candidate; return (winner, its signal set incl. ML signals)."""
+    ip_fv = analysis.features["ip"]
+    subnet_fv = analysis.features["subnet"]
+    user_fv = analysis.features.get("user")
     cached: dict[str, Signal] = {
         "frequency":           _signal_frequency(event, ctx),
         "ip_repetition":       _signal_ip_repetition(event, ctx),
         "distributed_sources": _signal_distributed_sources(event, ctx),
         "severity_history":    _signal_severity_history(event, ctx),
+        "port_scan":           _signal_port_scan(ip_fv),
+        "credential_stuffing": _signal_credential_stuffing(ip_fv, subnet_fv),
+        "low_slow_brute":      _signal_low_slow_brute(user_fv),
     }
+    ml = [Signal(s.name, s.fired, s.strength) for s in analysis.signals]
+    ml_fired = any(s.fired for s in ml)
 
-    best_type: ThreatType = ThreatType.UNKNOWN
-    best_signals: list[Signal] = []
-    best_score = 0.0
-
+    best_type, best_signals, best_score = ThreatType.UNKNOWN, [], 0.0
     for tt in CANDIDATE_THREAT_TYPES:
-        signals = _signals_for(tt, event, ctx, cached)
-        lex = signals[0]                           
-        if not lex.fired and tt != ThreatType.ANOMALY:
-                                                                        
-            continue
-        other = sum(s.strength for s in signals[1:] if s.fired)
-        score = 0.5 * lex.strength + 0.5 * other
+        signals = _signals_for(tt, event, cached)
+        lex = signals[0]
+        vec_name = _VECTOR_FOR.get(tt)
+        vec_fired = bool(vec_name) and cached[vec_name].fired
+        if tt == ThreatType.ANOMALY:
+            if not ml_fired:
+                continue
+            score = 0.5 * sum(s.strength for s in ml if s.fired)
+        else:
+            if not lex.fired and not vec_fired:
+                continue
+            other = sum(s.strength for s in signals[1:] if s.fired)
+            score = 0.5 * lex.strength + (1.0 * cached[vec_name].strength if vec_fired else 0.0) + 0.5 * other
         if score > best_score:
-            best_score = score
-            best_type = tt
-            best_signals = signals
+            best_type, best_signals, best_score = tt, signals, score
 
     if best_type == ThreatType.UNKNOWN:
-        best_type = _fallback_threat_type(event)
-        best_signals = [
-            cached["frequency"],
-            cached["ip_repetition"],
-            cached["severity_history"],
-        ]
+        if event.severity == Severity.INFO and not ml_fired:
+            return ThreatType.BENIGN, ml
+        best_type = ThreatType.ANOMALY if ml_fired else ThreatType.UNKNOWN
+        best_signals = [cached["frequency"], cached["ip_repetition"], cached["severity_history"]]
 
-    return best_type, best_signals
-
-
-                                                                        
+    return best_type, best_signals + ml
 
 
 def _severity_for_risk(risk_score: float) -> Severity:
     """Map a 0–10 risk score onto the canonical severity scale."""
-    if risk_score >= 8.5: return Severity.CRITICAL
-    if risk_score >= 6.5: return Severity.HIGH
-    if risk_score >= 4.0: return Severity.MEDIUM
-    if risk_score >= 2.0: return Severity.LOW
+    t = get_thresholds()
+    if risk_score >= t.sev_critical: return Severity.CRITICAL
+    if risk_score >= t.sev_high:     return Severity.HIGH
+    if risk_score >= t.sev_medium:   return Severity.MEDIUM
+    if risk_score >= t.sev_low:      return Severity.LOW
     return Severity.INFO
 
 
-                                                                        
-
-
 def update_context(event: Event, context: Optional[DetectionContext] = None) -> None:
-    """Push an event into the sliding window.
-
-    :func:`detect` calls this automatically; expose for replays or tests
-    where you want to seed history without producing a Threat.
-    """
+    """Push an event into the sliding window without producing a Threat."""
     (context or get_default_context()).add(event)
 
 
 def detect(event: Event, context: Optional[DetectionContext] = None) -> Threat:
-    """Run multi-signal, time-aware detection on ``event``.
+    """Run multi-signal, behaviour-aware detection on ``event``.
 
     Steps:
-        1. Push event into the sliding-window context (so it can
-           participate in its own analysis if appropriate).
-        2. For each candidate threat type, compute its signal set.
-        3. Pick the threat type with the highest combined score.
-        4. Compute risk and confidence from the winning signal set.
-        5. Derive output severity from risk.
-        6. Check kill-chain correlation against the recent threat history.
-        7. Record the resolved threat type for future correlation lookups.
+        1. Push event into the sliding-window context.
+        2. Run the anomaly engine (features → z-score / forest / campaign).
+        3. Score every candidate threat type (lexical + vector + context signals).
+        4. Compute per-factor risk breakdown, confidence, severity.
+        5. Kill-chain correlation; record for future lookups.
+        6. Attribute to an entity (user for low-and-slow, else source IP).
     """
     ctx = context or get_default_context()
-
-                                                                            
-                                                                           
-                                                                
     ctx.add(event)
 
-                                         
-    threat_type, signals = _select_threat_type(event, ctx)
+    analysis = _anomaly.get_engine().analyze(event)
+    threat_type, signals = _select_threat_type(event, ctx, analysis)
 
-                                          
-    risk = calculate_risk(event, ctx, signals)
+    breakdown = risk_breakdown(event, signals)
+    risk = round(max(0.0, min(10.0, sum(breakdown.values()))), 2)
     confidence = calculate_confidence(signals)
-
-                              
     severity = _severity_for_risk(risk)
-
-                               
     correlation = _detect_correlation(threat_type, ctx)
-
-                                                                             
     ctx.add_threat(threat_type)
+
+    entity = analysis.entity
+    primary_fv = analysis.features["ip"]
+    if "low_slow_brute" in {s.name for s in signals if s.fired} and event.username:
+        entity = {"type": "user", "key": event.username}
+        primary_fv = analysis.features["user"]
 
     return Threat(
         event_id=event.id,
@@ -562,4 +577,10 @@ def detect(event: Event, context: Optional[DetectionContext] = None) -> Threat:
         severity=severity,
         signals=[s.name for s in signals if s.fired],
         correlation=correlation,
+        risk_breakdown=breakdown,
+        entity=entity,
+        features=primary_fv.as_dict(),
+        zscores=analysis.zscores,
+        campaign_id=analysis.campaign.campaign_id if analysis.campaign else None,
+        mitre=list(MITRE.get(threat_type, [])),
     )

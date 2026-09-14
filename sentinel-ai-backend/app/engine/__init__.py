@@ -9,12 +9,15 @@ from app.engine.decision import (
 )
 from app.engine.detection import (
     KILL_CHAIN_PATTERNS,
+    MITRE,
+    RISK_BUDGET,
     DetectionContext,
     Signal,
     calculate_confidence,
     calculate_risk,
     detect,
     get_default_context,
+    risk_breakdown,
     reset_default_context,
     update_context,
 )
@@ -38,6 +41,8 @@ __all__ = [
     "ExecutionResult",
     "HANDLERS",
     "KILL_CHAIN_PATTERNS",
+    "MITRE",
+    "RISK_BUDGET",
     "PLAYBOOK",
     "ResponseReport",
     "SIMULATORS",
@@ -54,5 +59,6 @@ __all__ = [
     "get_default_context",
     "reset_default_context",
     "respond",
+    "risk_breakdown",
     "update_context",
 ]

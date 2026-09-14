@@ -97,6 +97,7 @@ def generate_ddos_event() -> Event:
         event_type=EventType.NETWORK,
         severity=severity,
         message=message,
+        label="ddos",
     )
 
 
@@ -124,6 +125,7 @@ def generate_bruteforce_event() -> Event:
         event_type=EventType.AUTH,
         severity=severity,
         message=message,
+        label="brute_force",
     )
 
 
@@ -150,13 +152,199 @@ def generate_sql_injection_event() -> Event:
         event_type=EventType.INTRUSION,
         severity=severity,
         message=message,
+        label="sql_injection",
     )
+
+
+_UA_POOL: tuple[str, ...] = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_4) AppleWebKit/605.1.15 Version/17.4 Safari/605.1.15",
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 Mobile/15E148",
+    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/124.0 Mobile Safari/537.36",
+    "NeoBank-iOS/5.12.0 (iPhone15,3; iOS 17.4)",
+    "NeoBank-Android/5.12.0 (Pixel 8; Android 14)",
+)
+_BOT_UA_POOL: tuple[str, ...] = (
+    "python-requests/2.31.0",
+    "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 Chrome/58.0 Safari/537.36",
+    "okhttp/4.9.3",
+    "Go-http-client/1.1",
+)
+_BENIGN_ENDPOINTS: tuple[tuple[str, float], ...] = (
+    ("/api/login", 0.18), ("/api/accounts", 0.22), ("/api/transactions", 0.25),
+    ("/api/transfer", 0.12), ("/api/cards", 0.08), ("/health", 0.10), ("/api/profile", 0.05),
+)
+_FIRST_NAMES = ("alice", "bob", "carol", "dave", "erin", "frank", "grace", "heidi", "ivan", "judy",
+                "mallory", "niaj", "olivia", "peggy", "rupert", "sybil", "trent", "victor", "wendy")
+_LAST_NAMES = ("smith", "patel", "garcia", "nguyen", "okafor", "kim", "rossi", "silva", "mueller", "chen")
+_GEOS = ("US", "GB", "IN", "DE", "BR", "SG", "CA", "AU")
+
+# A stable population of legitimate customers (ip, user, ua, geo) so per-entity
+# baselines have real repeat traffic to learn from.
+_rng_pop = random.Random(1234)
+_CUSTOMERS: tuple[dict, ...] = tuple(
+    {
+        "ip": f"{_rng_pop.choice(_PUBLIC_FIRST_OCTETS)}.{_rng_pop.randint(0, 255)}.{_rng_pop.randint(0, 255)}.{_rng_pop.randint(1, 254)}",
+        "user": f"{_rng_pop.choice(_FIRST_NAMES)}.{_rng_pop.choice(_LAST_NAMES)}{_rng_pop.randint(1, 99)}@neobank.io",
+        "ua": _rng_pop.choice(_UA_POOL),
+        "geo": _rng_pop.choice(_GEOS),
+    }
+    for _ in range(400)
+)
+
+
+def _random_public_ip_r(r: random.Random) -> str:
+    return f"{r.choice(_PUBLIC_FIRST_OCTETS)}.{r.randint(0, 255)}.{r.randint(0, 255)}.{r.randint(1, 254)}"
+
+
+def generate_benign_event(rng: random.Random | None = None) -> Event:
+    """A normal customer interaction. Occasionally a single mistyped password."""
+    r = rng or random
+    c = r.choice(_CUSTOMERS)
+    endpoint = _weighted_choice(_BENIGN_ENDPOINTS) if rng is None else _weighted_choice_r(r, _BENIGN_ENDPOINTS)
+    status = 200
+    if endpoint == "/api/login" and r.random() < 0.06:
+        status = 401
+    method = "POST" if endpoint in ("/api/login", "/api/transfer") else "GET"
+    return Event(
+        source_ip=c["ip"],
+        event_type=EventType.AUTH if endpoint == "/api/login" else EventType.SYSTEM,
+        severity=Severity.INFO,
+        message=f"{method} {endpoint} user={c['user']} status={status} ua={c['ua'][:24]}",
+        username=c["user"],
+        dest_port=443,
+        user_agent=c["ua"],
+        status_code=status,
+        endpoint=endpoint,
+        geo=c["geo"],
+        label="benign",
+    )
+
+
+def _weighted_choice_r(r: random.Random, choices: Sequence[tuple[T, float]]) -> T:
+    values, weights = zip(*choices)
+    return r.choices(values, weights=weights, k=1)[0]
+
+
+SESSION_KINDS: frozenset[str] = frozenset({
+    "benign", "port_scan", "credential_stuffing", "low_slow_brute_force",
+    "brute_force", "ddos", "sql_injection",
+})
+
+
+class AttackSession:
+    """Stateful multi-event campaign generator.
+
+    ``next()`` returns the next event of the campaign; ``delay_hint()`` is
+    the natural spacing in seconds (the traffic generator divides this by a
+    ``speed`` factor so a 30-second cadence can play out in 3 seconds for a
+    demo).
+    """
+
+    def __init__(self, kind: str, *, seed: int | None = None) -> None:
+        if kind not in SESSION_KINDS:
+            raise KeyError(f"Unknown session kind {kind!r}. Valid: {sorted(SESSION_KINDS)}")
+        self.kind = kind
+        self.r = random.Random(seed)
+        self.n = 0
+        self._ip = _random_public_ip_r(self.r)
+        self._port_cursor = self.r.randint(1, 1000)
+        self._sequential = self.r.random() < 0.6
+        self._bot_ua = self.r.choice(_BOT_UA_POOL)
+        self._pool_subnets = [
+            f"{self.r.choice(_PUBLIC_FIRST_OCTETS)}.{self.r.randint(0, 255)}.{self.r.randint(0, 255)}"
+            for _ in range(8)
+        ]
+        self._target_user = f"{self.r.choice(_FIRST_NAMES)}.{self.r.choice(_LAST_NAMES)}@neobank.io"
+        self._endpoint = self.r.choice(("/oauth/token", "/api/login"))
+
+    # -- kinds ----------------------------------------------------------
+
+    def _port_scan(self) -> Event:
+        if self._sequential:
+            port = self._port_cursor
+            self._port_cursor += 1
+        else:
+            port = self.r.randint(1, 65535)
+        sport = self.r.randint(32768, 60999)
+        return Event(
+            source_ip=self._ip,
+            event_type=EventType.NETWORK,
+            severity=Severity.INFO,
+            message=f"SYN {self._ip}:{sport} -> 10.0.0.12:{port} flags=S",
+            dest_port=port,
+            label="port_scan",
+        )
+
+    def _credential_stuffing(self) -> Event:
+        subnet = self.r.choice(self._pool_subnets)
+        ip = f"{subnet}.{self.r.randint(1, 254)}"
+        user = f"{self.r.choice(_FIRST_NAMES)}.{self.r.choice(_LAST_NAMES)}{self.r.randint(1, 9999)}@gmail.com"
+        return Event(
+            source_ip=ip,
+            event_type=EventType.AUTH,
+            severity=Severity.LOW,
+            message=f"POST {self._endpoint} user={user} status=401 ua={self._bot_ua}",
+            username=user,
+            dest_port=443,
+            user_agent=self._bot_ua,
+            status_code=401,
+            endpoint=self._endpoint,
+            label="credential_stuffing",
+        )
+
+    def _low_slow(self) -> Event:
+        ip = _random_public_ip_r(self.r)
+        ua = self.r.choice(_UA_POOL)
+        return Event(
+            source_ip=ip,
+            event_type=EventType.AUTH,
+            severity=Severity.LOW,
+            message=f"POST /api/login user={self._target_user} status=401 ua={ua[:24]}",
+            username=self._target_user,
+            dest_port=443,
+            user_agent=ua,
+            status_code=401,
+            endpoint="/api/login",
+            label="low_slow_brute_force",
+        )
+
+    def _legacy(self) -> Event:
+        e = SIMULATORS[self.kind]()
+        return e.model_copy(update={"label": self.kind})
+
+    def next(self) -> Event:
+        self.n += 1
+        if self.kind == "port_scan":
+            return self._port_scan()
+        if self.kind == "credential_stuffing":
+            return self._credential_stuffing()
+        if self.kind == "low_slow_brute_force":
+            return self._low_slow()
+        if self.kind == "benign":
+            return generate_benign_event(self.r)
+        return self._legacy()
+
+    def delay_hint(self) -> float:
+        return {
+            "port_scan": 0.15,
+            "credential_stuffing": 0.4,
+            "low_slow_brute_force": 30.0,
+            "brute_force": 1.0,
+            "ddos": 0.1,
+            "sql_injection": 1.5,
+            "benign": 0.5,
+        }[self.kind]
 
 
 SIMULATORS: dict[str, Callable[[], Event]] = {
     "ddos": generate_ddos_event,
     "brute_force": generate_bruteforce_event,
     "sql_injection": generate_sql_injection_event,
+    "benign": generate_benign_event,
+    "port_scan": lambda: AttackSession("port_scan").next(),
+    "credential_stuffing": lambda: AttackSession("credential_stuffing").next(),
+    "low_slow_brute_force": lambda: AttackSession("low_slow_brute_force").next(),
 }
 
 
@@ -189,55 +377,29 @@ def generate_batch(n: int, attack_type: str | None = None) -> list[Event]:
 def benign_feature_matrix(*, n: int = 2000, seed: int = 42):
     """Synthetic benign FeatureVectors for scorer warm-up.
 
-    Returns ``(X, per_type)`` where ``X`` is an ``n × len(FIELDS)`` numpy
-    array of IP-view vectors and ``per_type`` maps entity type → list of
-    FeatureVector for baseline seeding.
+    Generates ``n`` benign events on a simulated clock and pushes them
+    through a scratch :class:`FeatureStore`, so the resulting vectors have
+    exactly the shape real traffic produces — including cold-start vectors
+    for entities seen once. Returns ``(X, per_type)``: an ``n × len(FIELDS)``
+    numpy array of IP-view vectors, and per-entity-type vector lists for
+    baseline seeding.
     """
+    from datetime import datetime, timedelta, timezone
+
     import numpy as np
 
-    from app.engine.features import FeatureVector
+    from app.engine.features import FeatureStore, FeatureVector
 
     rng = random.Random(seed)
+    store = FeatureStore()
     per_type: dict[str, list[FeatureVector]] = {"ip": [], "user": [], "subnet": []}
     rows: list[list[float]] = []
+    clock = datetime.now(timezone.utc) - timedelta(seconds=n * 0.08)
     for _ in range(n):
-        ip_fv = FeatureVector(
-            fail_ratio=rng.uniform(0.0, 0.12),
-            attempts_per_min=rng.uniform(0.5, 4.0),
-            distinct_users=float(rng.randint(1, 2)),
-            distinct_ips=1.0,
-            distinct_ports=float(rng.randint(1, 2)),
-            port_sequentiality=0.0,
-            inter_arrival_mean=rng.uniform(8.0, 60.0),
-            inter_arrival_std=rng.uniform(1.0, 15.0),
-            ua_entropy=rng.uniform(0.0, 0.6),
-            hour_of_day_dev=rng.uniform(0.0, 0.5),
-            endpoint_diversity=rng.uniform(0.2, 0.7),
-        )
-        per_type["ip"].append(ip_fv)
-        rows.append(ip_fv.as_list())
-        per_type["user"].append(FeatureVector(
-            fail_ratio=rng.uniform(0.0, 0.15),
-            attempts_per_min=rng.uniform(0.3, 3.0),
-            distinct_users=1.0,
-            distinct_ips=float(rng.randint(1, 2)),
-            distinct_ports=1.0,
-            inter_arrival_mean=rng.uniform(20.0, 120.0),
-            inter_arrival_std=rng.uniform(2.0, 30.0),
-            ua_entropy=rng.uniform(0.0, 0.4),
-            hour_of_day_dev=rng.uniform(0.0, 0.5),
-            endpoint_diversity=rng.uniform(0.2, 0.7),
-        ))
-        per_type["subnet"].append(FeatureVector(
-            fail_ratio=rng.uniform(0.0, 0.12),
-            attempts_per_min=rng.uniform(1.0, 8.0),
-            distinct_users=float(rng.randint(1, 6)),
-            distinct_ips=float(rng.randint(1, 6)),
-            distinct_ports=float(rng.randint(1, 3)),
-            inter_arrival_mean=rng.uniform(4.0, 40.0),
-            inter_arrival_std=rng.uniform(1.0, 12.0),
-            ua_entropy=rng.uniform(0.3, 1.8),
-            hour_of_day_dev=rng.uniform(0.0, 0.5),
-            endpoint_diversity=rng.uniform(0.2, 0.7),
-        ))
+        clock += timedelta(seconds=rng.uniform(0.02, 0.15))
+        ev = generate_benign_event(rng).model_copy(update={"timestamp": clock})
+        vectors = store.observe(ev)
+        for etype, fv in vectors.items():
+            per_type[etype].append(fv)
+        rows.append(vectors["ip"].as_list())
     return np.asarray(rows, dtype=float), per_type
