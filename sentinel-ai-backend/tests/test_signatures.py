@@ -72,7 +72,7 @@ def test_real_browser_never_matches_a_learned_bot_signature():
 def test_persistence_round_trip(tmp_path):
     path = str(tmp_path / "sigs.json")
     s1 = signatures.SignatureStore(path=path)
-    s1.learn(_t(ThreatType.PORT_SCAN, ip="203.0.113.5"), _ev(ip="203.0.113.5", ua=None, ep=None, port=22))
+    s1.learn(_t(ThreatType.CREDENTIAL_STUFFING), _ev())
     assert s1.count() >= 1
     s2 = signatures.SignatureStore(path=path)
     assert s2.count() == s1.count()

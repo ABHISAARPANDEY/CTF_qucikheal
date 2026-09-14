@@ -143,18 +143,12 @@ class SignatureStore:
         if threat.threat_type in (ThreatType.BENIGN, ThreatType.UNKNOWN):
             return []
         indicators = threat.indicators or extract_indicators(event)
-        is_network = threat.threat_type in (ThreatType.DDOS, ThreatType.PORT_SCAN)
-        chosen: list[str] = []
-        for ind in indicators:
-            kind = ind.split(":", 1)[0]
-            if ind.startswith("ua:"):
-                # bot-UA indicators are inherently suspicious — always safe.
-                chosen.append(ind)
-            elif kind in ("subnet", "port") and is_network:
-                # a /24 or port pattern identifies the attacker only for
-                # network-source attacks; never for auth (real users share them).
-                chosen.append(ind)
-        # de-dup, keep order
+        # Only learn signatures on an automation-tool (bot) User-Agent — that
+        # fingerprint recurs across a campaign and never belongs to a real
+        # browser, so a learned signature is high-precision and reusable.
+        # (Spoofed DDoS /24s and shared ports never recur, so we don't learn
+        # them — they'd only create signature sprawl.)
+        chosen: list[str] = [i for i in indicators if i.startswith("ua:")]
         seen_c: set[str] = set()
         chosen = [i for i in chosen if not (i in seen_c or seen_c.add(i))]
         if not chosen:
