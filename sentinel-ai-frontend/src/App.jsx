@@ -13,6 +13,7 @@ const HoneypotPage = lazy(() => import('./components/honeypot/HoneypotPage'));
 const ReportsPage = lazy(() => import('./components/reports/ReportsPage'));
 const SettingsPage = lazy(() => import('./components/settings/SettingsPage'));
 const AlertsPage = lazy(() => import('./components/alerts/AlertsPage'));
+const EntityPage = lazy(() => import('./components/entities/EntityPage'));
 
 
 
@@ -28,6 +29,7 @@ export default function App() {
         <Route element={<AppShell />}>
           <Route index element={<OverviewPage />} />
           <Route path="alerts" element={<LazyRoute><AlertsPage /></LazyRoute>} />
+          <Route path="entities/:type/:key" element={<LazyRoute><EntityPage /></LazyRoute>} />
           <Route path="scenarios" element={<AttackPanel />} />
           <Route path="systems" element={<LazyRoute><SystemsMonitorPage /></LazyRoute>} />
           <Route path="infrastructure" element={<LazyRoute><InfrastructureView /></LazyRoute>} />
