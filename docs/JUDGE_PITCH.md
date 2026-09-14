@@ -69,6 +69,21 @@ All synchronized through a live websocket stream and rendered in a high-fidelity
 
 ---
 
+## 6b) Detection Metrics (reproducible)
+
+`python -m scripts.eval_detection --n 5000 --seed 42` — 5,000 mixed events (85% benign), ground truth never read by the detector:
+
+| Vector | Precision | Recall | F1 | Events to first alert |
+|---|---|---|---|---|
+| Port scan | 1.00 | 0.97 | 0.98 | 5 |
+| Credential stuffing (rotating /24 pool) | 1.00 | 0.94 | 0.97 | 8 |
+| Low-and-slow brute force (1 user, rotating IPs) | 1.00 | 0.96 | 0.98 | 5 |
+| DDoS | 1.00 | 0.96 | 0.98 | 5 |
+| SQL injection | 1.00 | 0.95 | 0.98 | 6 |
+| **Benign (4,280 events)** | — | — | — | **0.00% false-alert rate** |
+
+How: per-entity behavioural features (IP / user / /24) → population z-score baselines + scikit-learn IsolationForest + campaign fingerprint clustering, voted with dedicated vector detectors; every alert carries a per-factor risk breakdown.
+
 ## 7) Demo Script (Recommended)
 
 ### Minute 0-1: Setup Context

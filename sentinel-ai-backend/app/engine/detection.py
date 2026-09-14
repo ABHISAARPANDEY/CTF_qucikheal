@@ -268,7 +268,14 @@ def _signal_lexical(event: Event, threat_type: ThreatType) -> Signal:
 
 
 def _signal_frequency(event: Event, ctx: DetectionContext) -> Signal:
-    """How many non-informational events of the same EventType in the window?"""
+    """How many non-informational events of the same EventType in the window?
+
+    Informational events never inherit the surrounding volume: an attack
+    burst must not raise the risk of a legitimate login that happens to
+    share the event type.
+    """
+    if event.severity == Severity.INFO:
+        return Signal("frequency", False, 0.0)
     n = len(_non_info(ctx.events_for_type(event.event_type)))
     if n < FREQ_LOW_THRESHOLD:
         return Signal("frequency", False, 0.0)

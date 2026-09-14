@@ -51,6 +51,7 @@ class Thresholds(BaseModel):
     # Campaign clustering
     campaign_min_ips: int = Field(default=6, ge=2, le=10000)
     campaign_min_subnets: int = Field(default=3, ge=1, le=10000)
+    campaign_min_fail_ratio: float = Field(default=0.5, ge=0.0, le=1.0)
 
     # Isolation forest
     if_contamination: float = Field(default=0.05, gt=0.0, le=0.5)

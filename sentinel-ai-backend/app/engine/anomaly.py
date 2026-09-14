@@ -210,7 +210,13 @@ class CampaignClusterer:
         users = {row[2] for row in live if row[2]}
         fails = sum(1 for row in live if row[3])
         subnets = {subnet_of(i) for i in ips}
-        fired = len(ips) >= t.campaign_min_ips and len(subnets) >= t.campaign_min_subnets
+        fail_ratio = fails / len(live) if live else 0.0
+        # A popular fingerprint is not a campaign; a popular *failing* one is.
+        fired = (
+            len(ips) >= t.campaign_min_ips
+            and len(subnets) >= t.campaign_min_subnets
+            and fail_ratio >= t.campaign_min_fail_ratio
+        )
         strength = min(1.0, len(ips) / (2.0 * t.campaign_min_ips)) if fired else 0.0
         return CampaignMatch(
             campaign_id=str(uuid.uuid5(uuid.NAMESPACE_URL, "|".join(fp))),
@@ -218,7 +224,7 @@ class CampaignClusterer:
             distinct_ips=len(ips),
             distinct_subnets=len(subnets),
             distinct_users=len(users),
-            fail_ratio=fails / len(live) if live else 0.0,
+            fail_ratio=fail_ratio,
             events=len(live),
             members=sorted(ips)[:50],
             signal=Signal("distributed_campaign", fired, round(strength, 2)),
@@ -235,15 +241,20 @@ class CampaignClusterer:
             live = [row for row in buf if row[0] >= cutoff]
             ips = {row[1] for row in live}
             subnets = {subnet_of(i) for i in ips}
-            if len(ips) >= t.campaign_min_ips and len(subnets) >= t.campaign_min_subnets:
-                users = {row[2] for row in live if row[2]}
-                fails = sum(1 for row in live if row[3])
+            users = {row[2] for row in live if row[2]}
+            fails = sum(1 for row in live if row[3])
+            fail_ratio = fails / len(live) if live else 0.0
+            if (
+                len(ips) >= t.campaign_min_ips
+                and len(subnets) >= t.campaign_min_subnets
+                and fail_ratio >= t.campaign_min_fail_ratio
+            ):
                 out.append({
                     "campaign_id": str(uuid.uuid5(uuid.NAMESPACE_URL, "|".join(fp))),
                     "user_agent": fp[0], "endpoint": fp[1],
                     "distinct_ips": len(ips), "distinct_subnets": len(subnets),
                     "distinct_users": len(users),
-                    "fail_ratio": round(fails / len(live), 3) if live else 0.0,
+                    "fail_ratio": round(fail_ratio, 3),
                     "events": len(live), "members": sorted(ips)[:50],
                     "last_seen": max(row[0] for row in live).isoformat(),
                 })
