@@ -3,7 +3,7 @@ import { Routes, Route, Outlet, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
-import ComingSoon from './components/ComingSoon';
+import CommandPalette from './components/CommandPalette';
 import AttackPanel from './components/scenarios/AttackPanel';
 import ThreatFeedPanel from './components/panels/ThreatFeedPanel';
 import RiskMeterPanel from './components/panels/RiskMeterPanel';
@@ -16,6 +16,8 @@ const SystemsMonitorPage = lazy(() => import('./components/systems/SystemsMonito
 const InfrastructureView = lazy(() => import('./components/infrastructure/InfrastructureView'));
 const HoneypotPage = lazy(() => import('./components/honeypot/HoneypotPage'));
 const ReportsPage = lazy(() => import('./components/reports/ReportsPage'));
+const SettingsPage = lazy(() => import('./components/settings/SettingsPage'));
+const AlertsPage = lazy(() => import('./components/alerts/AlertsPage'));
 
 
 
@@ -30,13 +32,13 @@ export default function App() {
       <Routes>
         <Route element={<AppShell />}>
           <Route index element={<DashboardView />} />
+          <Route path="alerts" element={<LazyRoute><AlertsPage /></LazyRoute>} />
           <Route path="scenarios" element={<AttackPanel />} />
           <Route path="systems" element={<LazyRoute><SystemsMonitorPage /></LazyRoute>} />
           <Route path="infrastructure" element={<LazyRoute><InfrastructureView /></LazyRoute>} />
           <Route path="honeypot" element={<LazyRoute><HoneypotPage /></LazyRoute>} />
           <Route path="reports" element={<LazyRoute><ReportsPage /></LazyRoute>} />
-          <Route path="settings" element={<ComingSoon section="settings" />} />
-          <Route path="support" element={<ComingSoon section="support" />} />
+          <Route path="settings" element={<LazyRoute><SettingsPage /></LazyRoute>} />
         </Route>
       </Routes>
     </div>);
@@ -54,9 +56,7 @@ function LazyRoute({ children }) {
 function RouteLoadingFallback() {
   return (
     <div className="flex-1 min-h-0 flex items-center justify-center p-6">
-      <div className="rounded-xl border border-neon-cyan/30 bg-bg-elevated/45 px-4 py-2 font-mono text-[11px] uppercase tracking-[0.22em] text-neon-cyan shadow-[0_0_18px_-8px_rgba(0,212,255,0.65)]">
-        loading module...
-      </div>
+      <div className="rounded-md border border-line bg-bg-1 px-3 py-1.5 text-[12px] text-fg-2">Loading…</div>
     </div>
   );
 }
@@ -67,6 +67,7 @@ function AppShell() {
 
   return (
     <>
+      <CommandPalette />
       <Sidebar />
       <main className="relative z-10 flex-1 flex flex-col min-w-0 min-h-0">
         <Topbar mode={mode} onModeChange={setMode} />

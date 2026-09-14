@@ -1,180 +1,171 @@
-import { motion } from 'framer-motion';
+import { useEffect, useState } from 'react';
 import { NavLink } from 'react-router-dom';
 import {
-  LayoutDashboard,
+  Activity,
+  BellRing,
   Crosshair,
-  Server,
-  Network,
-  Skull,
   FileText,
-  ShieldCheck,
+  Network,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Server,
   Settings,
-  LifeBuoy } from
-'lucide-react';
+  ShieldCheck,
+  Skull
+} from 'lucide-react';
+import { cn } from '../lib/utils';
+import { useRealtime } from '../lib/useRealtime';
+import { selectAlertList } from '../lib/selectors';
 
 const PREFETCH = {
   '/systems': () => import('./systems/SystemsMonitorPage'),
   '/infrastructure': () => import('./infrastructure/InfrastructureView'),
   '/honeypot': () => import('./honeypot/HoneypotPage'),
-  '/reports': () => import('./reports/ReportsPage')
+  '/reports': () => import('./reports/ReportsPage'),
+  '/alerts': () => import('./alerts/AlertsPage'),
+  '/settings': () => import('./settings/SettingsPage')
 };
 
-const NAV = [
-{ id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, to: '/' },
-{ id: 'scenarios', label: 'Attack Scenarios', icon: Crosshair, to: '/scenarios' },
-{ id: 'systems', label: 'Systems', icon: Server, to: '/systems' },
-{ id: 'infrastructure', label: 'Infrastructure', icon: Network, to: '/infrastructure' },
-{ id: 'honeypot', label: 'Honeypot', icon: Skull, to: '/honeypot' },
-{ id: 'reports', label: 'Reports', icon: FileText, to: '/reports' }];
+export const NAV_GROUPS = [
+  {
+    label: 'Detect',
+    items: [
+      { id: 'overview', label: 'Overview', icon: Activity, to: '/' },
+      { id: 'alerts', label: 'Alerts', icon: BellRing, to: '/alerts', badge: 'open' }
+    ]
+  },
+  {
+    label: 'Simulate',
+    items: [
+      { id: 'scenarios', label: 'Scenarios', icon: Crosshair, to: '/scenarios' },
+      { id: 'systems', label: 'Systems', icon: Server, to: '/systems' },
+      { id: 'infrastructure', label: 'Infrastructure', icon: Network, to: '/infrastructure' },
+      { id: 'honeypot', label: 'Honeypot', icon: Skull, to: '/honeypot' }
+    ]
+  },
+  {
+    label: 'Operate',
+    items: [
+      { id: 'reports', label: 'Reports', icon: FileText, to: '/reports' },
+      { id: 'settings', label: 'Settings', icon: Settings, to: '/settings' }
+    ]
+  }
+];
 
-
-const SECONDARY = [
-{ id: 'settings', label: 'Settings', icon: Settings, to: '/settings' },
-{ id: 'support', label: 'Support', icon: LifeBuoy, to: '/support' }];
-
+const PIN_KEY = 'sentinel.sidebar.pinned';
 
 export default function Sidebar() {
-  return (
-    <aside className="relative z-10 flex h-full w-[248px] shrink-0 flex-col border-r border-border-subtle glass-deep">
-      {}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute top-0 bottom-0 right-0 w-px bg-gradient-to-b from-transparent via-neon-cyan/20 to-transparent" />
-      
+  const [pinned, setPinned] = useState(() => {
+    try {
+      return localStorage.getItem(PIN_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [hover, setHover] = useState(false);
+  const expanded = pinned || hover;
+  const alerts = useRealtime(selectAlertList);
+  const openCount = alerts.filter((a) => ['new', 'acknowledged', 'investigating'].includes(a.status)).length;
 
-      {}
-      <div className="relative flex items-center gap-3 px-5 h-16 border-b border-border-subtle">
-        <motion.div
-          whileHover={{ rotate: -6, scale: 1.05 }}
-          transition={{ type: 'spring', stiffness: 360, damping: 20 }}
-          className="relative flex h-9 w-9 items-center justify-center rounded-xl bg-bg-elevated border border-neon-cyan/25 ring-glow-cyan">
-          
-          <ShieldCheck className="h-5 w-5 text-neon-cyan text-glow-cyan" strokeWidth={2.25} />
-          <motion.span
-            aria-hidden
-            animate={{ opacity: [0.4, 0.9, 0.4] }}
-            transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
-            className="absolute inset-0 rounded-xl ring-1 ring-neon-cyan/40" />
-          
-        </motion.div>
-        <div className="leading-tight">
-          <div className="text-[15px] font-semibold tracking-tight text-fg-primary">
-            Sentinel<span className="text-neon-cyan text-glow-cyan">AI</span>
-          </div>
-          <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-fg-muted">
-            Cyber Defense
-          </div>
+  useEffect(() => {
+    try {
+      localStorage.setItem(PIN_KEY, pinned ? '1' : '0');
+    } catch {
+      void 0;
+    }
+  }, [pinned]);
+
+  return (
+    <aside
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{ width: expanded ? 208 : 56 }}
+      className="relative z-20 flex h-full shrink-0 flex-col border-r border-line bg-bg-1 transition-[width] duration-150 ease-out overflow-hidden"
+    >
+      <div className="flex h-14 items-center gap-3 px-3.5 border-b border-line">
+        <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-accent-soft text-accent-hover">
+          <ShieldCheck className="h-4 w-4" strokeWidth={2.25} />
+        </span>
+        <div className={cn('leading-tight whitespace-nowrap transition-opacity', expanded ? 'opacity-100' : 'opacity-0')}>
+          <div className="text-[13.5px] font-semibold tracking-tight text-fg-0">SentinelAI</div>
+          <div className="text-[10.5px] text-fg-2">SOC console</div>
         </div>
       </div>
 
-      {}
-      <nav className="flex-1 overflow-y-auto scrollbar-cyber px-3 py-5">
-        <p className="px-3 mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-fg-faint">
-          Operations
-        </p>
-        <ul className="space-y-1">
-          {NAV.map((item) =>
-          <NavItem key={item.id} item={item} />
-          )}
-        </ul>
-
-        <p className="mt-8 px-3 mb-2 font-mono text-[10px] uppercase tracking-[0.2em] text-fg-faint">
-          Workspace
-        </p>
-        <ul className="space-y-1">
-          {SECONDARY.map((item) =>
-          <NavItem key={item.id} item={item} />
-          )}
-        </ul>
+      <nav className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-cyber px-2 py-3">
+        {NAV_GROUPS.map((g) => (
+          <div key={g.label} className="mb-4">
+            <p
+              className={cn(
+                'px-2 mb-1 text-[10px] uppercase tracking-[0.1em] text-fg-3 whitespace-nowrap transition-opacity',
+                expanded ? 'opacity-100' : 'opacity-0'
+              )}
+            >
+              {g.label}
+            </p>
+            <ul className="space-y-0.5">
+              {g.items.map((item) => (
+                <NavItem key={item.id} item={item} expanded={expanded} count={item.badge === 'open' ? openCount : 0} />
+              ))}
+            </ul>
+          </div>
+        ))}
       </nav>
 
-      {}
-      <motion.div
-        whileHover={{ scale: 1.015 }}
-        className="relative m-3 rounded-xl border border-border-subtle bg-bg-elevated/60 p-3 overflow-hidden transition-cyber hover:border-neon-green/30">
-        
-        <span
-          aria-hidden
-          className="pointer-events-none absolute -top-12 -right-12 h-32 w-32 rounded-full blur-3xl bg-neon-green/15" />
-        
-        <div className="relative flex items-center gap-2 mb-1.5">
-          <span className="relative flex h-2 w-2">
-            <span className="absolute inline-flex h-full w-full rounded-full bg-neon-green opacity-60 animate-ping" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-neon-green shadow-[0_0_8px_rgba(0,255,159,0.9)]" />
-          </span>
-          <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-fg-secondary">
-            Agent online
-          </span>
-        </div>
-        <div className="relative text-[12px] text-fg-secondary leading-snug">
-          24 nodes monitored · 0 anomalies
-        </div>
-      </motion.div>
-    </aside>);
-
+      <button
+        type="button"
+        onClick={() => setPinned((p) => !p)}
+        className="flex h-10 items-center gap-3 px-4 border-t border-line text-fg-3 hover:text-fg-1 transition-cyber"
+        aria-label={pinned ? 'Collapse sidebar' : 'Pin sidebar open'}
+      >
+        {pinned ? <PanelLeftClose className="h-4 w-4 shrink-0" /> : <PanelLeftOpen className="h-4 w-4 shrink-0" />}
+        <span className={cn('text-[12px] whitespace-nowrap transition-opacity', expanded ? 'opacity-100' : 'opacity-0')}>
+          {pinned ? 'Collapse' : 'Keep open'}
+        </span>
+      </button>
+    </aside>
+  );
 }
 
-function NavItem({ item }) {
+function NavItem({ item, expanded, count }) {
   const Icon = item.icon;
-  const end = item.to === '/';
-
+  const prefetch = () => {
+    const p = PREFETCH[item.to];
+    if (p) void p();
+  };
   return (
     <li>
       <NavLink
         to={item.to}
-        end={end}
-        onMouseEnter={() => {
-          const prefetch = PREFETCH[item.to];
-          if (prefetch) void prefetch();
-        }}
-        onFocus={() => {
-          const prefetch = PREFETCH[item.to];
-          if (prefetch) void prefetch();
-        }}
+        end={item.to === '/'}
+        onMouseEnter={prefetch}
+        onFocus={prefetch}
+        title={expanded ? undefined : item.label}
         className={({ isActive }) =>
-        [
-        'group relative flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left overflow-hidden',
-        'text-[13.5px] transition-cyber',
-        isActive ? 'text-fg-primary' : 'text-fg-secondary hover:text-fg-primary'].
-        join(' ')
-        }>
-        
-        {({ isActive }) =>
-        <>
-            {isActive &&
-          <motion.span
-            layoutId="sidebar-active-bg"
-            transition={{ type: 'spring', stiffness: 360, damping: 30 }}
-            className="absolute inset-0 rounded-lg bg-gradient-to-r from-neon-cyan/15 via-neon-cyan/5 to-transparent border border-neon-cyan/20 shadow-[0_0_24px_-8px_rgba(0,212,255,0.55)]" />
-
-          }
-
-            {!isActive &&
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-0 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-r from-white/[0.04] to-transparent" />
-
-          }
-
-            {isActive &&
-          <motion.span
-            layoutId="sidebar-active-rail"
-            transition={{ type: 'spring', stiffness: 380, damping: 32 }}
-            className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-neon-cyan shadow-[0_0_10px_2px_rgba(0,212,255,0.7)]" />
-
-          }
-
-            <Icon
-            className={[
-            'relative h-4 w-4 shrink-0 transition-colors',
-            isActive ? 'text-neon-cyan text-glow-cyan' : 'text-fg-muted group-hover:text-neon-cyan/80'].
-            join(' ')}
-            strokeWidth={2} />
-          
-            <span className="relative truncate">{item.label}</span>
-          </>
+          cn(
+            'group relative flex h-8 w-full items-center gap-3 rounded-md px-2.5 text-[13px] transition-cyber focus-ring',
+            isActive ? 'bg-bg-2 text-fg-0' : 'text-fg-2 hover:text-fg-0 hover:bg-bg-2/60'
+          )
         }
+      >
+        {({ isActive }) => (
+          <>
+            {isActive && <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-full bg-accent" />}
+            <Icon className={cn('h-4 w-4 shrink-0', isActive ? 'text-accent-hover' : 'text-fg-2 group-hover:text-fg-1')} strokeWidth={2} />
+            <span className={cn('flex-1 truncate transition-opacity', expanded ? 'opacity-100' : 'opacity-0')}>{item.label}</span>
+            {count > 0 && (
+              <span
+                className={cn(
+                  'font-mono tabular text-[10.5px] rounded px-1 min-w-5 text-center bg-sev-critical/15 text-sev-critical',
+                  expanded ? 'opacity-100' : 'absolute -top-0.5 right-0.5 opacity-100 scale-90'
+                )}
+              >
+                {count > 99 ? '99+' : count}
+              </span>
+            )}
+          </>
+        )}
       </NavLink>
-    </li>);
-
+    </li>
+  );
 }

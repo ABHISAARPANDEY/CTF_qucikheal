@@ -1,12 +1,25 @@
-import { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
-import { Activity, Bell, Search, Bot, UserCog, RotateCcw } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useLocation } from 'react-router-dom';
+import { Bot, Command, RotateCcw, UserCog } from 'lucide-react';
 import { Button } from './ui/button';
-import { Badge } from './ui/badge';
+import { Kbd } from './ui/kbd';
 import { cn } from '../lib/utils';
 import { useRealtime } from '../lib/useRealtime';
-import { selectStatus } from '../lib/selectors';
+import { selectAlertList, selectStats, selectStatus } from '../lib/selectors';
 import { resetDemoState } from '../lib/api';
+import { fmtNum, fmtPct } from '../lib/format';
+import { bus, EVENTS } from '../lib/eventBus';
+
+const TITLES = {
+  '/': ['Overview', 'Live detection posture'],
+  '/alerts': ['Alerts', 'Triage queue'],
+  '/scenarios': ['Scenarios', 'Attack simulation & detection lab'],
+  '/systems': ['Systems', 'Service telemetry'],
+  '/infrastructure': ['Infrastructure', 'Host & process view'],
+  '/honeypot': ['Honeypot', 'Adversary interaction'],
+  '/reports': ['Reports', 'Incident summary & exports'],
+  '/settings': ['Settings', 'Detection thresholds & traffic']
+};
 
 function useClock() {
   const [now, setNow] = useState(() => new Date());
@@ -17,17 +30,31 @@ function useClock() {
   return now;
 }
 
-const fmtTime = (d) =>
-d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-
-const fmtDate = (d) =>
-d.toLocaleDateString('en-US', { weekday: 'short', day: '2-digit', month: 'short' });
+const OPEN = new Set(['new', 'acknowledged', 'investigating']);
 
 export default function Topbar({ mode, onModeChange }) {
   const now = useClock();
+  const location = useLocation();
   const [resetting, setResetting] = useState(false);
-
   const wsStatus = useRealtime(selectStatus);
+  const stats = useRealtime(selectStats);
+  const alerts = useRealtime(selectAlertList);
+
+  const [title, subtitle] = useMemo(() => {
+    if (location.pathname.startsWith('/entities/')) {
+      const [, , type, ...rest] = location.pathname.split('/');
+      return ['Entity', `${type} · ${decodeURIComponent(rest.join('/'))}`];
+    }
+    return TITLES[location.pathname] ?? ['SentinelAI', ''];
+  }, [location.pathname]);
+
+  const open = useMemo(() => {
+    const c = { critical: 0, high: 0, medium: 0, low: 0 };
+    for (const a of alerts) if (OPEN.has(a.status) && a.severity in c) c[a.severity] += 1;
+    return c;
+  }, [alerts]);
+  const openTotal = open.critical + open.high + open.medium + open.low;
+
   const handleReset = async () => {
     if (resetting) return;
     setResetting(true);
@@ -41,144 +68,115 @@ export default function Topbar({ mode, onModeChange }) {
   };
 
   return (
-    <header className="relative z-10 flex h-16 shrink-0 items-center gap-4 border-b border-border-subtle glass-deep px-6">
-      {}
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-neon-cyan/25 to-transparent" />
-      
-
-      {}
-      <div className="relative flex-1 max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-fg-muted" />
-        <input
-          type="text"
-          placeholder="Search threats, hosts, CVEs…"
-          className="w-full h-9 rounded-lg bg-bg-elevated/60 border border-border-subtle pl-9 pr-3
-                     text-[13px] text-fg-primary placeholder:text-fg-muted
-                     focus:outline-none focus:border-neon-cyan/40 focus:ring-1 focus:ring-neon-cyan/30
-                     transition-cyber" />
-
-
-
-        
+    <header className="relative z-10 flex h-14 shrink-0 items-center gap-4 border-b border-line bg-bg-1 px-4">
+      <div className="min-w-0 w-56">
+        <div className="text-[14px] font-semibold text-fg-0 truncate">{title}</div>
+        <div className="text-[11.5px] text-fg-2 truncate">{subtitle}</div>
       </div>
 
-      {}
-      <LiveSystemPill status={wsStatus} />
-
-      {}
-      <ModeToggle mode={mode} onChange={onModeChange} />
-
-      <Button
-        type="button"
-        variant="outline"
-        onClick={handleReset}
-        disabled={resetting}
-        className="h-9 rounded-lg border-neon-violet/35 text-neon-violet hover:border-neon-violet/65 hover:bg-neon-violet/[0.08] font-mono text-[10px] uppercase tracking-[0.2em]"
-      >
-        <RotateCcw className="h-3.5 w-3.5 mr-1.5" />
-        {resetting ? 'resetting...' : 'demo reset'}
-      </Button>
-
-      {}
-      <Button
-        variant="outline"
-        size="icon"
-        className="relative h-9 w-9 rounded-lg hover:border-neon-orange/40"
-        aria-label="Notifications">
-        
-        <Bell className="h-4 w-4" />
-        <span className="absolute top-1.5 right-1.5 h-1.5 w-1.5 rounded-full bg-neon-orange shadow-[0_0_8px_rgba(255,159,28,0.95)] animate-[blink_1.4s_ease-in-out_infinite]" />
-      </Button>
-
-      {}
-      <div className="text-right leading-tight">
-        <div className="font-mono text-[14px] tabular-nums text-fg-primary">{fmtTime(now)}</div>
-        <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-fg-muted">
-          {fmtDate(now)}
+      <div className="hidden lg:flex items-center gap-1 rounded-md border border-line bg-bg-0 px-1 h-9">
+        <Metric label="ev/s" value={stats ? fmtNum(Math.round(stats.events_per_sec ?? 0)) : '—'} />
+        <Sep />
+        <div className="flex items-center gap-2 px-2.5">
+          <span className="text-[10.5px] uppercase tracking-[0.06em] text-fg-3">open</span>
+          <span className="font-mono tabular text-[12.5px] text-fg-0">{openTotal}</span>
+          <span className="flex items-center gap-1.5">
+            <Dot n={open.critical} cls="bg-sev-critical" />
+            <Dot n={open.high} cls="bg-sev-high" />
+            <Dot n={open.medium} cls="bg-sev-medium" />
+            <Dot n={open.low} cls="bg-sev-low" />
+          </span>
+        </div>
+        <Sep />
+        <Metric label="suppressed" value={stats ? fmtPct(stats.suppression_ratio ?? 0) : '—'} />
+        <Sep />
+        <Metric label="ingested" value={stats ? fmtNum(stats.events_ingested ?? 0) : '—'} />
+        <Sep />
+        <div className="flex items-center gap-1.5 px-2.5">
+          <span
+            className={cn(
+              'h-1.5 w-1.5 rounded-full',
+              wsStatus === 'connected' ? 'bg-ok' : wsStatus === 'connecting' || wsStatus === 'reconnecting' ? 'bg-warn animate-blink' : 'bg-bad'
+            )}
+          />
+          <span className="text-[11.5px] text-fg-2">{wsStatus === 'connected' ? 'live' : wsStatus}</span>
         </div>
       </div>
-    </header>);
 
+      <div className="flex-1" />
+
+      <Button variant="outline" size="sm" onClick={() => bus.emit(EVENTS.OPEN_PALETTE)} className="gap-2 text-fg-2">
+        <Command className="h-3.5 w-3.5" />
+        <span className="hidden md:inline">Command</span>
+        <Kbd>⌘K</Kbd>
+      </Button>
+
+      <ModeToggle mode={mode} onChange={onModeChange} />
+
+      <Button variant="outline" size="sm" onClick={handleReset} disabled={resetting} className="text-fg-2">
+        <RotateCcw className="h-3.5 w-3.5" />
+        {resetting ? 'Resetting…' : 'Reset demo'}
+      </Button>
+
+      <div className="text-right leading-tight hidden sm:block">
+        <div className="font-mono tabular text-[13px] text-fg-0">
+          {now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+        </div>
+        <div className="text-[10.5px] text-fg-3">
+          {now.toLocaleDateString('en-US', { weekday: 'short', day: '2-digit', month: 'short' })}
+        </div>
+      </div>
+    </header>
+  );
 }
 
-const STATUS_TONE = {
-  connected: { variant: 'success', dot: 'bg-neon-green shadow-[0_0_10px_rgba(0,255,159,0.95)]', ping: 'bg-neon-green opacity-70 animate-ping', label: 'Live System', secondary: 'Secure' },
-  connecting: { variant: 'warning', dot: 'bg-neon-orange shadow-[0_0_10px_rgba(255,159,28,0.95)] animate-[blink_1.4s_ease-in-out_infinite]', ping: 'bg-neon-orange opacity-60 animate-ping', label: 'Connecting', secondary: 'Backend' },
-  disconnected: { variant: 'destructive', dot: 'bg-neon-red shadow-[0_0_10px_rgba(255,59,59,0.95)]', ping: 'bg-neon-red opacity-60 animate-ping', label: 'Offline', secondary: 'Backend' }
-};
-
-function LiveSystemPill({ status = 'connecting' }) {
-  const tone = STATUS_TONE[status] ?? STATUS_TONE.connecting;
-
-  const isLive = status === 'connected';
+function Metric({ label, value }) {
   return (
-    <Badge
-      variant={tone.variant}
-      glow={isLive}
-      className={cn(
-        'hidden md:inline-flex h-9 px-3 gap-2 rounded-lg',
-        'text-[11px]'
-      )}>
-      
-      <span className="relative flex h-2 w-2">
-        <span className={cn('absolute inline-flex h-full w-full rounded-full', tone.ping)} />
-        <span className={cn('relative inline-flex h-2 w-2 rounded-full', tone.dot)} />
-      </span>
-      <span className={isLive ? 'font-semibold' : 'font-medium'}>{tone.label}</span>
-      <span className="h-3 w-px bg-current/30 mx-0.5 opacity-30" />
-      <Activity className="h-3.5 w-3.5" />
-      <span>{tone.secondary}</span>
-    </Badge>);
+    <div className="flex items-baseline gap-1.5 px-2.5">
+      <span className="text-[10.5px] uppercase tracking-[0.06em] text-fg-3">{label}</span>
+      <span className="font-mono tabular text-[12.5px] text-fg-0">{value}</span>
+    </div>
+  );
+}
 
+function Sep() {
+  return <span className="h-4 w-px bg-line-strong" />;
+}
+
+function Dot({ n, cls }) {
+  return (
+    <span className="flex items-center gap-0.5">
+      <span className={cn('h-1.5 w-1.5 rounded-full', n ? cls : 'bg-bg-3')} />
+      <span className="font-mono tabular text-[10.5px] text-fg-2">{n}</span>
+    </span>
+  );
 }
 
 function ModeToggle({ mode, onChange }) {
   const isAuto = mode === 'autonomous';
   return (
-    <div
-      role="tablist"
-      aria-label="Operation mode"
-      className="relative hidden sm:flex h-9 items-center rounded-lg border border-border-subtle bg-bg-elevated/60 p-1 shadow-[0_0_24px_-12px_rgba(0,212,255,0.4)]">
-      
-      {}
-      <motion.span
-        layout
-        transition={{ type: 'spring', stiffness: 480, damping: 36 }}
-        className={[
-        'absolute inset-y-1 w-[calc(50%-0.25rem)] rounded-md',
-        isAuto ?
-        'left-1 bg-gradient-to-r from-neon-cyan/20 to-neon-cyan/5 border border-neon-cyan/30 shadow-[0_0_18px_-4px_rgba(0,212,255,0.7)]' :
-        'left-[calc(50%+0rem)] bg-gradient-to-r from-neon-violet/20 to-neon-violet/5 border border-neon-violet/30 shadow-[0_0_18px_-4px_rgba(167,139,250,0.7)]'].
-        join(' ')} />
-      
-      <motion.button
-        whileTap={{ scale: 0.96 }}
-        role="tab"
-        aria-selected={isAuto}
-        onClick={() => onChange?.('autonomous')}
-        className={[
-        'relative z-10 flex items-center gap-1.5 px-3 h-7 rounded-md font-mono text-[11px] uppercase tracking-[0.2em] transition-cyber',
-        isAuto ? 'text-neon-cyan text-glow-cyan' : 'text-fg-muted hover:text-fg-secondary'].
-        join(' ')}>
-        
-        <Bot className="h-3.5 w-3.5" />
-        Autonomous
-      </motion.button>
-      <motion.button
-        whileTap={{ scale: 0.96 }}
-        role="tab"
-        aria-selected={!isAuto}
-        onClick={() => onChange?.('assisted')}
-        className={[
-        'relative z-10 flex items-center gap-1.5 px-3 h-7 rounded-md font-mono text-[11px] uppercase tracking-[0.2em] transition-cyber',
-        !isAuto ? 'text-neon-violet' : 'text-fg-muted hover:text-fg-secondary'].
-        join(' ')}>
-        
-        <UserCog className="h-3.5 w-3.5" />
-        Assisted
-      </motion.button>
-    </div>);
-
+    <div role="tablist" aria-label="Operation mode" className="hidden sm:flex h-8 items-center rounded-md border border-line bg-bg-0 p-0.5">
+      {[
+        ['autonomous', Bot, 'Auto'],
+        ['assisted', UserCog, 'Assisted']
+      ].map(([val, Icon, label]) => {
+        const active = (val === 'autonomous') === isAuto;
+        return (
+          <button
+            key={val}
+            role="tab"
+            aria-selected={active}
+            onClick={() => onChange?.(val)}
+            className={cn(
+              'flex items-center gap-1.5 h-7 px-2.5 rounded text-[12px] transition-cyber focus-ring',
+              active ? 'bg-bg-2 text-fg-0' : 'text-fg-2 hover:text-fg-1'
+            )}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {label}
+          </button>
+        );
+      })}
+    </div>
+  );
 }

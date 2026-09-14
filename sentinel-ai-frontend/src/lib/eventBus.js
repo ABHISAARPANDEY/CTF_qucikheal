@@ -27,6 +27,7 @@ export const bus = {
 };
 
 export const EVENTS = {
-
-  SIMULATE_REQUEST: 'sentinel:simulate-request'
+  SIMULATE_REQUEST: 'sentinel:simulate-request',
+  OPEN_PALETTE: 'sentinel:open-palette',
+  TOAST: 'sentinel:toast'
 };
