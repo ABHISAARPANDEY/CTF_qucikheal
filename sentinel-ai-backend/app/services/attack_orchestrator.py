@@ -79,7 +79,7 @@ _SCENARIO_TO_PIPELINE: dict[str, str | None] = {
                                                                               
 
 
-StageKind = Literal["emit", "inject"]
+StageKind = Literal["emit", "inject", "traffic"]
 Severity = Literal["info", "warning", "high", "critical"]
 
 
@@ -104,6 +104,11 @@ class Stage:
     attack_kind: Optional[str] = None
     target_system: Optional[str] = None
     duration_seconds: Optional[float] = None
+
+    # ``traffic`` stages: push a real event campaign through the detection
+    # pipeline via the traffic generator (kind from simulation.SESSION_KINDS).
+    traffic_kind: Optional[str] = None
+    traffic_speed: float = 1.0
 
 
 @dataclass(frozen=True)
@@ -133,7 +138,8 @@ SCENARIOS: dict[str, Scenario] = {
         stages=(
             Stage(0.0, "emit", severity="info", system=API_GATEWAY,
                   label="Volumetric pattern observed: TCP SYN ratio elevated 6×"),
-            Stage(1.2, "inject", attack_kind="ddos", target_system=API_GATEWAY,
+            Stage(0.3, "traffic", traffic_kind="ddos", duration_seconds=12.0, traffic_speed=2.0),
+            Stage(0.9, "inject", attack_kind="ddos", target_system=API_GATEWAY,
                   duration_seconds=16.0),
             Stage(3.0, "emit", severity="warning", system=API_GATEWAY,
                   label="Edge listener pool saturated — rate limiter degraded"),
@@ -151,7 +157,8 @@ SCENARIOS: dict[str, Scenario] = {
         stages=(
             Stage(0.0, "emit", severity="info", system=AUTH_SERVICE,
                   label="Failed-auth rate doubled in last 60s window"),
-            Stage(1.0, "inject", attack_kind="brute_force",
+            Stage(0.3, "traffic", traffic_kind="credential_stuffing", duration_seconds=15.0, traffic_speed=3.0),
+            Stage(0.7, "inject", attack_kind="brute_force",
                   target_system=AUTH_SERVICE, duration_seconds=10.0),
             Stage(3.0, "emit", severity="warning", system=AUTH_SERVICE,
                   label="Account lockouts triggering across high-value accounts"),
@@ -171,7 +178,8 @@ SCENARIOS: dict[str, Scenario] = {
         stages=(
             Stage(0.0, "emit", severity="info", system=DATABASE,
                   label="Suspicious SQL pattern on /accounts/balance"),
-            Stage(1.0, "inject", attack_kind="sql_injection",
+            Stage(0.3, "traffic", traffic_kind="sql_injection", duration_seconds=12.0, traffic_speed=2.0),
+            Stage(0.7, "inject", attack_kind="sql_injection",
                   target_system=DATABASE, duration_seconds=12.0),
             Stage(3.0, "emit", severity="warning", system=DATABASE,
                   label="UNION-based payloads enumerating information_schema"),
@@ -210,13 +218,16 @@ SCENARIOS: dict[str, Scenario] = {
                                 
             Stage(0.0, "emit", severity="info", system=API_GATEWAY,
                   label="[T-0] Reconnaissance: subdomain & endpoint enumeration"),
-            Stage(2.0, "inject", attack_kind="ddos",
+            Stage(0.3, "traffic", traffic_kind="port_scan", duration_seconds=8.0, traffic_speed=4.0),
+            Stage(1.7, "inject", attack_kind="ddos",
                   target_system=API_GATEWAY, duration_seconds=4.0),
 
                                 
             Stage(2.5, "emit", severity="warning", system=AUTH_SERVICE,
                   label="[T-1] Initial access: credential stuffing on /oauth/token"),
-            Stage(1.0, "inject", attack_kind="brute_force",
+            Stage(0.3, "traffic", traffic_kind="credential_stuffing", duration_seconds=10.0, traffic_speed=3.0),
+            Stage(0.2, "traffic", traffic_kind="low_slow_brute_force", duration_seconds=20.0, traffic_speed=15.0),
+            Stage(0.5, "inject", attack_kind="brute_force",
                   target_system=AUTH_SERVICE, duration_seconds=8.0),
 
                                   
@@ -462,6 +473,18 @@ class AttackOrchestrator:
                 stage.severity,
                 stage.system,
             )
+        elif stage.kind == "traffic":
+            assert stage.traffic_kind, "traffic stage requires traffic_kind"
+            try:
+                from app.services.traffic_generator import get_traffic_generator
+
+                get_traffic_generator().start_attack(
+                    stage.traffic_kind,
+                    duration_s=stage.duration_seconds or 15.0,
+                    speed=stage.traffic_speed,
+                )
+            except RuntimeError:
+                logger.debug("traffic generator unavailable; skipping traffic stage")
         elif stage.kind == "inject":
             assert stage.attack_kind, "inject stage requires attack_kind"
             await self._simulator.inject_attack(
