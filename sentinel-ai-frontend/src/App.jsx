@@ -5,12 +5,7 @@ import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
 import CommandPalette from './components/CommandPalette';
 import AttackPanel from './components/scenarios/AttackPanel';
-import ThreatFeedPanel from './components/panels/ThreatFeedPanel';
-import RiskMeterPanel from './components/panels/RiskMeterPanel';
-import AttackControlPanel from './components/panels/AttackControlPanel';
-import AttackTimelinePanel from './components/panels/AttackTimelinePanel';
-import AICopilotPanel from './components/panels/AICopilotPanel';
-import SystemsOverviewPanel from './components/systems/SystemsOverviewPanel';
+import OverviewPage from './components/overview/OverviewPage';
 
 const SystemsMonitorPage = lazy(() => import('./components/systems/SystemsMonitorPage'));
 const InfrastructureView = lazy(() => import('./components/infrastructure/InfrastructureView'));
@@ -31,7 +26,7 @@ export default function App() {
     <div className="relative h-screen w-screen flex bg-bg-base text-fg-primary overflow-hidden">
       <Routes>
         <Route element={<AppShell />}>
-          <Route index element={<DashboardView />} />
+          <Route index element={<OverviewPage />} />
           <Route path="alerts" element={<LazyRoute><AlertsPage /></LazyRoute>} />
           <Route path="scenarios" element={<AttackPanel />} />
           <Route path="systems" element={<LazyRoute><SystemsMonitorPage /></LazyRoute>} />
@@ -82,78 +77,5 @@ function AppShell() {
         </motion.div>
       </main>
     </>);
-
-}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-function DashboardView() {
-  return (
-    <div
-      className="flex-1 min-h-0 grid gap-3 p-3
-                 grid-cols-1 grid-rows-none auto-rows-min
-                 lg:grid-cols-4 lg:grid-rows-3 lg:auto-rows-auto">
-
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, delay: 0.0 }}
-        className="min-h-0 lg:col-span-2 lg:row-start-1">
-        <ThreatFeedPanel />
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, delay: 0.05 }}
-        className="min-h-0 lg:col-start-3 lg:row-start-1">
-        <RiskMeterPanel />
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, delay: 0.1 }}
-        className="min-h-0 lg:col-start-4 lg:row-span-3 lg:row-start-1">
-        <AICopilotPanel />
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, delay: 0.15 }}
-        className="min-h-0 lg:col-span-2 lg:row-start-2">
-        <AttackControlPanel />
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, delay: 0.2 }}
-        className="min-h-0 lg:col-start-3 lg:row-start-2">
-        <AttackTimelinePanel />
-      </motion.div>
-
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, delay: 0.25 }}
-        className="min-h-0 lg:col-span-3 lg:row-start-3">
-        <SystemsOverviewPanel />
-      </motion.div>
-    </div>);
 
 }
