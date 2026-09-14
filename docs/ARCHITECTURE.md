@@ -166,6 +166,33 @@ Attack injections change metrics over time and can create lateral pressure on pe
 
 ## 6) Frontend Architecture
 
+> **v2 SOC console.** The frontend was reskinned from the original cinematic
+> neon theme to a calm, dense, production-SOC visual system (near-black
+> surfaces, one accent, muted semantic severity colours, no glows) and gained
+> the screens the ML detection backend enables.
+
+### 6.0 Pages
+
+| Route | Purpose |
+|---|---|
+| `/` Overview | KPI row (events, ev/s, open alerts by severity, suppression, campaigns, MTTD), risk arc, alerts-over-time chart, virtualised live event stream with real filters, active-campaign strip, AI copilot |
+| `/alerts` Alert queue | Dense virtualised table with faceted filters, keyboard triage (`j/k`, `a`ck, `r`esolve, `f`alse-positive), and an **explainability drawer**: per-factor risk breakdown, fired signals, feature-vs-baseline z-score bars, recommended actions, notes |
+| `/entities/:type/:key` | Drill-down for an ip / user / subnet / campaign: feature table with z-scores + baseline + sparklines, related alerts, recent events |
+| `/scenarios` | Attack catalog + **Detection Lab** tab (launch a vector, watch signals fire and time-to-first-alert live) |
+| `/reports` | Incident summary from `/reports/incident`: metrics, alerts by severity/type, MITRE coverage, top attackers/targets, timeline, JSON/CSV/Markdown/Print-PDF export |
+| `/settings` | Runtime threshold sliders with live "N of last M events would alert" preview, forest retrain, traffic-generator controls |
+| `/systems`, `/infrastructure`, `/honeypot` | Existing simulation views, reskinned |
+
+Realtime store gains `alerts` (id→alert map hydrated from REST on connect and
+updated by `alert_new`/`alert_update`), `stats` + `statsHistory` (from the 1 Hz
+`stats` frame), `config` (thresholds, from `config_update`), and `eventsMeta`
+(threat verdict per event id). New UI primitives: `Table` (+ `useVirtualRows`),
+`Drawer`, `Tabs`, `Slider`, `Stat`, `Sparkline`, `Kbd`, `Empty`, plus a ⌘K
+`CommandPalette`. The theme is token-driven: legacy `neon-*`/`glass-*` names are
+aliased to the calm palette so old panels inherit it without edits.
+
+### 6-legacy) Original Frontend Architecture
+
 ### 6.1 UI Layers
 
 - **Layout shell**: sidebar, topbar, route container
