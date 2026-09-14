@@ -136,6 +136,27 @@ class RecoveryFrame(BaseModel):
     data: RecoveryData
 
 
+class AlertFrame(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["alert_new", "alert_update"]
+    alert: dict[str, Any]
+
+
+class StatsFrame(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["stats"]
+    data: dict[str, Any]
+
+
+class ConfigUpdateFrame(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: Literal["config_update"]
+    thresholds: dict[str, Any]
+
+
 WsFrame = Annotated[
     SystemUpdateFrame
     | ScenarioEventFrame
@@ -143,7 +164,10 @@ WsFrame = Annotated[
     | HoneypotAnalysisFrame
     | AnomalyFrame
     | ProcessLogFrame
-    | RecoveryFrame,
+    | RecoveryFrame
+    | AlertFrame
+    | StatsFrame
+    | ConfigUpdateFrame,
     Field(discriminator="type"),
 ]
 
