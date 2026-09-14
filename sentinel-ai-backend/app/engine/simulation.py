@@ -184,3 +184,60 @@ def generate_batch(n: int, attack_type: str | None = None) -> list[Event]:
     if n < 0:
         raise ValueError("n must be non-negative")
     return [generate_event(attack_type) for _ in range(n)]
+
+
+def benign_feature_matrix(*, n: int = 2000, seed: int = 42):
+    """Synthetic benign FeatureVectors for scorer warm-up.
+
+    Returns ``(X, per_type)`` where ``X`` is an ``n × len(FIELDS)`` numpy
+    array of IP-view vectors and ``per_type`` maps entity type → list of
+    FeatureVector for baseline seeding.
+    """
+    import numpy as np
+
+    from app.engine.features import FeatureVector
+
+    rng = random.Random(seed)
+    per_type: dict[str, list[FeatureVector]] = {"ip": [], "user": [], "subnet": []}
+    rows: list[list[float]] = []
+    for _ in range(n):
+        ip_fv = FeatureVector(
+            fail_ratio=rng.uniform(0.0, 0.12),
+            attempts_per_min=rng.uniform(0.5, 4.0),
+            distinct_users=float(rng.randint(1, 2)),
+            distinct_ips=1.0,
+            distinct_ports=float(rng.randint(1, 2)),
+            port_sequentiality=0.0,
+            inter_arrival_mean=rng.uniform(8.0, 60.0),
+            inter_arrival_std=rng.uniform(1.0, 15.0),
+            ua_entropy=rng.uniform(0.0, 0.6),
+            hour_of_day_dev=rng.uniform(0.0, 0.5),
+            endpoint_diversity=rng.uniform(0.2, 0.7),
+        )
+        per_type["ip"].append(ip_fv)
+        rows.append(ip_fv.as_list())
+        per_type["user"].append(FeatureVector(
+            fail_ratio=rng.uniform(0.0, 0.15),
+            attempts_per_min=rng.uniform(0.3, 3.0),
+            distinct_users=1.0,
+            distinct_ips=float(rng.randint(1, 2)),
+            distinct_ports=1.0,
+            inter_arrival_mean=rng.uniform(20.0, 120.0),
+            inter_arrival_std=rng.uniform(2.0, 30.0),
+            ua_entropy=rng.uniform(0.0, 0.4),
+            hour_of_day_dev=rng.uniform(0.0, 0.5),
+            endpoint_diversity=rng.uniform(0.2, 0.7),
+        ))
+        per_type["subnet"].append(FeatureVector(
+            fail_ratio=rng.uniform(0.0, 0.12),
+            attempts_per_min=rng.uniform(1.0, 8.0),
+            distinct_users=float(rng.randint(1, 6)),
+            distinct_ips=float(rng.randint(1, 6)),
+            distinct_ports=float(rng.randint(1, 3)),
+            inter_arrival_mean=rng.uniform(4.0, 40.0),
+            inter_arrival_std=rng.uniform(1.0, 12.0),
+            ua_entropy=rng.uniform(0.3, 1.8),
+            hour_of_day_dev=rng.uniform(0.0, 0.5),
+            endpoint_diversity=rng.uniform(0.2, 0.7),
+        ))
+    return np.asarray(rows, dtype=float), per_type
