@@ -1,10 +1,10 @@
 """Application configuration loaded from environment variables."""
 
 from functools import lru_cache
-from typing import List
+from typing import Annotated, List
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -30,7 +30,9 @@ class Settings(BaseSettings):
 
     log_level: str = Field(default="INFO")
 
-    cors_origins: List[str] = Field(default_factory=lambda: ["*"])
+    # NoDecode: stop pydantic-settings from JSON-decoding the env value so a
+    # plain "*" or "a.com,b.com" reaches the splitter below (json.loads("*") throws).
+    cors_origins: Annotated[List[str], NoDecode] = Field(default_factory=lambda: ["*"])
 
                                                                           
                                                                       
@@ -61,8 +63,11 @@ class Settings(BaseSettings):
     @field_validator("cors_origins", mode="before")
     @classmethod
     def _split_cors_origins(cls, value):
+        if value is None or value == "":
+            return ["*"]
         if isinstance(value, str):
-            return [origin.strip() for origin in value.split(",") if origin.strip()]
+            parts = [origin.strip() for origin in value.split(",") if origin.strip()]
+            return parts or ["*"]
         return value
 
     @field_validator("log_level")
