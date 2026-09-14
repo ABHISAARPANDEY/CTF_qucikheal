@@ -1,6 +1,6 @@
 import { cn } from '../../lib/utils';
 
-export function Slider({ label, hint, value, min = 0, max = 10, step = 0.1, onChange, format = (v) => v, className, dirty }) {
+export function Slider({ label, hint, value, min = 0, max = 10, step = 0.1, onChange, className, dirty }) {
   const pct = max > min ? ((value - min) / (max - min)) * 100 : 0;
   return (
     <label className={cn('block', className)}>
@@ -26,7 +26,7 @@ export function Slider({ label, hint, value, min = 0, max = 10, step = 0.1, onCh
         className="w-full h-1.5 appearance-none rounded-full bg-bg-3 accent-[color:var(--color-accent)] cursor-pointer"
         style={{ background: `linear-gradient(to right, var(--color-accent) ${pct}%, var(--color-bg-3) ${pct}%)` }}
       />
-      {hint && <div className="mt-1 text-[11px] text-fg-3">{hint}{typeof format === 'function' && format !== ((v) => v) ? '' : ''}</div>}
+      {hint && <div className="mt-1 text-[11px] text-fg-3">{hint}</div>}
     </label>
   );
 }

@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { useRealtime } from '../../lib/useRealtime';
@@ -10,9 +10,13 @@ const SEVS = ['low', 'medium', 'high', 'critical'];
 
 export default function AlertsChart() {
   const alerts = useRealtime(selectAlertList);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(id);
+  }, []);
 
   const data = useMemo(() => {
-    const now = Date.now();
     const start = now - MINUTES * 60_000;
     const buckets = Array.from({ length: MINUTES }, (_, i) => {
       const t = start + i * 60_000;
@@ -25,7 +29,7 @@ export default function AlertsChart() {
       if (a.severity in buckets[i]) buckets[i][a.severity] += 1;
     }
     return buckets;
-  }, [alerts]);
+  }, [alerts, now]);
 
   return (
     <Card className="h-full">
