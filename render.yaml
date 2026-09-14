@@ -28,7 +28,8 @@ services:
   - type: web
     name: sentinel-ai-frontend
     runtime: static
-    plan: free
+    # NB: static sites have no plan tier (always free) — a `plan:` key here is
+    # rejected with "no such plan free for service type web".
     rootDir: sentinel-ai-frontend
     buildCommand: npm ci && npm run build
     # Relative to rootDir (see https://render.com/docs/monorepo-support)
