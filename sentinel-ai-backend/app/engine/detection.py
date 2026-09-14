@@ -552,6 +552,34 @@ def _severity_for_risk(risk_score: float) -> Severity:
     return Severity.INFO
 
 
+def _attribute(
+    event: Event, signals: list[Signal], analysis: _anomaly.AnalysisResult
+) -> tuple[dict[str, str], FeatureVector]:
+    """Pick the entity an alert should be keyed on.
+
+    Attribution decides de-duplication: a proxy-pool campaign must collapse
+    into *one* alert (keyed on the campaign), not one alert per rotating IP.
+    """
+    t = get_thresholds()
+    fired = {s.name for s in signals if s.fired}
+    ip_fv = analysis.features["ip"]
+    subnet_fv = analysis.features["subnet"]
+    campaign = analysis.campaign
+
+    if "low_slow_brute" in fired and event.username:
+        return {"type": "user", "key": event.username}, analysis.features["user"]
+    if "credential_stuffing" in fired:
+        if ip_fv.distinct_users >= t.stuffing_min_users:
+            return {"type": "ip", "key": str(event.source_ip)}, ip_fv
+        if subnet_fv.distinct_users >= t.stuffing_min_users:
+            return {"type": "subnet", "key": analysis.subnet_key}, subnet_fv
+        if campaign is not None:
+            return {"type": "campaign", "key": campaign.campaign_id}, ip_fv
+    if campaign is not None and "distributed_campaign" in fired:
+        return {"type": "campaign", "key": campaign.campaign_id}, ip_fv
+    return analysis.entity, ip_fv
+
+
 def update_context(event: Event, context: Optional[DetectionContext] = None) -> None:
     """Push an event into the sliding window without producing a Threat."""
     (context or get_default_context()).add(event)
@@ -581,11 +609,7 @@ def detect(event: Event, context: Optional[DetectionContext] = None) -> Threat:
     correlation = _detect_correlation(threat_type, ctx)
     ctx.add_threat(threat_type)
 
-    entity = analysis.entity
-    primary_fv = analysis.features["ip"]
-    if "low_slow_brute" in {s.name for s in signals if s.fired} and event.username:
-        entity = {"type": "user", "key": event.username}
-        primary_fv = analysis.features["user"]
+    entity, primary_fv = _attribute(event, signals, analysis)
 
     return Threat(
         event_id=event.id,

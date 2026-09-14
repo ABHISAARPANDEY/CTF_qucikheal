@@ -41,7 +41,7 @@ class Thresholds(BaseModel):
     stuffing_fail_ratio: float = Field(default=0.8, ge=0.0, le=1.0)
     lowslow_min_ips: int = Field(default=5, ge=2, le=1000)
     lowslow_fail_ratio: float = Field(default=0.8, ge=0.0, le=1.0)
-    lowslow_min_gap_s: float = Field(default=5.0, ge=0.0, le=3600.0)
+    lowslow_min_gap_s: float = Field(default=0.0, ge=0.0, le=3600.0)
 
     # Statistical baseline
     zscore_fire: float = Field(default=2.0, ge=0.0, le=10.0)

@@ -273,6 +273,7 @@ class CampaignClusterer:
 @dataclass
 class AnalysisResult:
     entity: dict[str, str]
+    subnet_key: str
     features: dict[str, FeatureVector]
     zscores: dict[str, float]
     signals: list[Signal]
@@ -331,6 +332,7 @@ class AnomalyEngine:
 
         return AnalysisResult(
             entity={"type": primary_type, "key": keys["ip"]},
+            subnet_key=keys["subnet"],
             features=vectors,
             zscores=z,
             signals=[z_sig, if_sig, c_sig],

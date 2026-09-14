@@ -95,3 +95,16 @@ def test_thresholds_change_alters_detection():
     for i in range(15):
         last = detect(_auth("192.0.2.88", f"user{i}"))
     assert "credential_stuffing" not in last.signals
+
+
+def test_proxy_pool_stuffing_is_attributed_to_campaign():
+    """Rotating IPs across subnets: the alert entity must be the campaign, not each IP."""
+    from app.engine.simulation import AttackSession
+
+    s = AttackSession("credential_stuffing", seed=9)
+    last = None
+    for _ in range(30):
+        last = detect(s.next())
+    assert last.threat_type == ThreatType.CREDENTIAL_STUFFING
+    assert last.entity["type"] == "campaign"
+    assert last.entity["key"] == last.campaign_id

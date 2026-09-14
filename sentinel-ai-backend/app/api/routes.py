@@ -527,9 +527,23 @@ async def detection_campaigns() -> dict[str, Any]:
 
 @api_router.get("/detection/entity/{etype}/{key:path}", tags=["detection"])
 async def detection_entity(etype: str, key: str) -> dict[str, Any]:
-    if etype not in ("ip", "user", "subnet"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="etype must be ip|user|subnet")
+    if etype not in ("ip", "user", "subnet", "campaign"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="etype must be ip|user|subnet|campaign")
     eng = anomaly.get_engine()
+    if etype == "campaign":
+        camp = next((c for c in eng.campaigns.campaigns() if c["campaign_id"] == key), None)
+        alerts = [a for a in get_alert_store().all() if a.entity.get("key") == key or a.campaign_id == key][:50]
+        if camp is None and not alerts:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="campaign not found")
+        return {
+            "entity": {"type": "campaign", "key": key},
+            "campaign": camp,
+            "features": alerts[0].features if alerts else {},
+            "zscores": alerts[0].zscores if alerts else {},
+            "baseline": eng.baseline.snapshot("ip"),
+            "events": [],
+            "alerts": [a.model_dump(mode="json") for a in alerts],
+        }
     fv = eng.features.features_for(etype, key)
     events = eng.features.events_for(etype, key)
     _, z = eng.baseline.score(etype, fv)
