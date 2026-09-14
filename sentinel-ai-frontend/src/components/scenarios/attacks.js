@@ -23,7 +23,7 @@ const RAW_ATTACKS = [
 { id: 'udp-reflection', name: 'UDP Reflection', category: 'NETWORK' },
 { id: 'dns-amplification', name: 'DNS Amplification', category: 'NETWORK' },
 { id: 'icmp-storm', name: 'ICMP Storm', category: 'NETWORK' },
-{ id: 'port-scan', name: 'Port Scan', category: 'NETWORK' },
+{ id: 'port-scan', name: 'Port Scan', category: 'NETWORK', active: true, trafficKind: 'port_scan', detector: 'port_scan', desc: 'Sequential port sweep from a single host' },
 { id: 'arp-spoofing', name: 'ARP Spoofing', category: 'NETWORK' },
 { id: 'bgp-hijack', name: 'BGP Hijack', category: 'NETWORK' },
 { id: 'mac-flooding', name: 'MAC Flooding', category: 'NETWORK' },
@@ -31,7 +31,8 @@ const RAW_ATTACKS = [
 
 
 { id: 'brute-force', name: 'Brute Force Auth', category: 'AUTH', active: true, backendType: 'brute_force', desc: 'Repeated credential probes from a single source' },
-{ id: 'cred-stuffing', name: 'Credential Stuffing', category: 'AUTH' },
+{ id: 'cred-stuffing', name: 'Credential Stuffing', category: 'AUTH', active: true, trafficKind: 'credential_stuffing', detector: 'credential_stuffing', desc: 'Rotating residential-proxy pool, one attempt per account' },
+{ id: 'low-slow', name: 'Low & Slow Brute Force', category: 'AUTH', active: true, trafficKind: 'low_slow_brute_force', detector: 'low_slow_brute', desc: 'One account, one attempt per rotating IP, 30s cadence' },
 { id: 'password-spray', name: 'Password Spray', category: 'AUTH' },
 { id: 'session-hijack', name: 'Session Hijack', category: 'AUTH' },
 { id: 'oauth-phish', name: 'OAuth Phishing', category: 'AUTH' },

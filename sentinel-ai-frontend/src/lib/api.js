@@ -53,6 +53,16 @@ export async function health() {
 
 
 
+export async function triggerAttackKind(attack) {
+  // Traffic-generator sessions (new behavioural vectors).
+  const kind = typeof attack === 'string' ? attack : attack?.trafficKind;
+  if (kind) {
+    const speed = kind === 'low_slow_brute_force' ? 15 : kind === 'port_scan' ? 3 : 3;
+    return trafficAttack({ kind, duration_s: 22, speed });
+  }
+  return null;
+}
+
 export async function triggerAttack(attackType) {
   const scenarioTypes = new Set([
     'ddos',

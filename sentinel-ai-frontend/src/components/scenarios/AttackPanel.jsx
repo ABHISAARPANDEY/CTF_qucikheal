@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Crosshair, Filter, Radio } from 'lucide-react';
 import Terminal from './Terminal';
+import DetectionLab from './DetectionLab';
+import { Tabs, TabList, Tab, TabPanel } from '../ui/tabs';
 import {
   buildHoneypotEngagement,
   buildHoneypotPipelineFinale,
@@ -10,7 +12,7 @@ import {
 import { ATTACKS, CATEGORIES } from './attacks';
 import { Badge } from '../ui/badge';
 import { Button } from '../ui/button';
-import { triggerAttack } from '../../lib/api';
+import { triggerAttack, triggerAttackKind } from '../../lib/api';
 import { useRealtime } from '../../lib/useRealtime';
 import {
   selectActions,
@@ -40,6 +42,21 @@ import {
 const WIRED_COUNT = ATTACKS.filter((a) => a.active).length;
 
 export default function AttackPanel() {
+  return (
+    <div className="flex-1 min-h-0 flex flex-col">
+      <Tabs defaultValue="catalog" className="flex-1 min-h-0">
+        <TabList className="px-3 pt-2">
+          <Tab value="catalog">Attack catalog</Tab>
+          <Tab value="lab">Detection lab</Tab>
+        </TabList>
+        <TabPanel value="catalog"><ScenarioCatalog /></TabPanel>
+        <TabPanel value="lab"><DetectionLab /></TabPanel>
+      </Tabs>
+    </div>
+  );
+}
+
+function ScenarioCatalog() {
 
   const [selected, setSelected] = useState(null);
 
@@ -95,7 +112,8 @@ export default function AttackPanel() {
     setScript(buildHoneypotEngagement(attack));
 
     try {
-      await triggerAttack(attack.backendType);
+      if (attack.trafficKind) await triggerAttackKind(attack);
+      else await triggerAttack(attack.backendType);
     } catch (err) {
       setScript((prev) => [
       ...(prev ?? []),
