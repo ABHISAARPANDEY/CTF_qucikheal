@@ -1,7 +1,6 @@
 import { Suspense, lazy, useState } from 'react';
 import { Routes, Route, Outlet, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import AmbientBackground from './components/AmbientBackground';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
 import ComingSoon from './components/ComingSoon';
@@ -28,7 +27,6 @@ const ReportsPage = lazy(() => import('./components/reports/ReportsPage'));
 export default function App() {
   return (
     <div className="relative h-screen w-screen flex bg-bg-base text-fg-primary overflow-hidden">
-      <AmbientBackground />
       <Routes>
         <Route element={<AppShell />}>
           <Route index element={<DashboardView />} />
