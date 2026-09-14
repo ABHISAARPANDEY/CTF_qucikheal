@@ -612,7 +612,10 @@ def detect(event: Event, context: Optional[DetectionContext] = None) -> Threat:
         risk = round(max(0.0, min(10.0, sig_match.risk)), 2)
         severity = _severity_for_risk(risk)
         ctx.add_threat(sig_match.threat_type)
-        entity, primary_fv = _attribute(event, [Signal("signature_match", True, 1.0)], analysis)
+        primary_fv = analysis.features["ip"]
+        # Collapse every instant match of the same signature into ONE alert
+        # (a rotating proxy pool sharing a bot UA is one campaign, not N alerts).
+        entity = {"type": "signature", "key": sig_match.signature_id}
         breakdown = {"signature": risk}
         return Threat(
             event_id=event.id,

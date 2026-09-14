@@ -529,8 +529,22 @@ async def detection_campaigns() -> dict[str, Any]:
 
 @api_router.get("/detection/entity/{etype}/{key:path}", tags=["detection"])
 async def detection_entity(etype: str, key: str) -> dict[str, Any]:
-    if etype not in ("ip", "user", "subnet", "campaign"):
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="etype must be ip|user|subnet|campaign")
+    if etype not in ("ip", "user", "subnet", "campaign", "signature"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="etype must be ip|user|subnet|campaign|signature")
+    if etype == "signature":
+        sig = next((x for x in get_signature_store().all() if x["id"] == key), None)
+        alerts = [a for a in get_alert_store().all() if a.entity.get("key") == key][:50]
+        if sig is None and not alerts:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="signature not found")
+        return {
+            "entity": {"type": "signature", "key": key},
+            "signature": sig,
+            "features": {},
+            "zscores": {},
+            "baseline": {},
+            "events": [],
+            "alerts": [a.model_dump(mode="json") for a in alerts],
+        }
     eng = anomaly.get_engine()
     if etype == "campaign":
         camp = next((c for c in eng.campaigns.campaigns() if c["campaign_id"] == key), None)

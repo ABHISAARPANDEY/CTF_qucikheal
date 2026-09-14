@@ -140,7 +140,7 @@ class SignatureStore:
 
     def learn(self, threat: Threat, event: Event) -> list[Signature]:
         """Distil a confirmed threat into signatures. Returns newly created ones."""
-        if threat.threat_type in (ThreatType.BENIGN, ThreatType.UNKNOWN):
+        if threat.threat_type in (ThreatType.BENIGN, ThreatType.UNKNOWN, ThreatType.ANOMALY):
             return []
         indicators = threat.indicators or extract_indicators(event)
         # Only learn signatures on an automation-tool (bot) User-Agent — that
