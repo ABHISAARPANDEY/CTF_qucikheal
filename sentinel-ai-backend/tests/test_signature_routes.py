@@ -18,18 +18,24 @@ def _client(tmp_path, monkeypatch):
 
 
 def test_signatures_learned_and_listed_then_cleared(tmp_path, monkeypatch):
+    import json
+
     with _client(tmp_path, monkeypatch) as c:
         assert c.get("/api/v1/signatures").json()["count"] == 0
-        # crank the generator and run a credential-stuffing burst so the
-        # pipeline confirms an alert and learns a signature
-        c.put("/api/v1/traffic/config", json={"rate_eps": 80, "benign_ratio": 0.2})
-        c.post("/api/v1/traffic/attack", json={"kind": "credential_stuffing", "duration_s": 6, "speed": 40})
-        listing = {"count": 0}
-        for _ in range(30):
-            time.sleep(0.4)
-            listing = c.get("/api/v1/signatures").json()
-            if listing["count"] >= 1:
-                break
+        # Drive a credential-stuffing campaign synchronously through the replay
+        # endpoint (processed inline, no dependence on the background loop) so
+        # the pipeline confirms an alert and learns a signature deterministically.
+        lines = [
+            json.dumps({
+                "source_ip": f"45.146.{i}.{i + 1}", "event_type": "auth",
+                "message": "POST /oauth/token status=401", "username": f"user{i}@corp.com",
+                "user_agent": "python-requests/2.31.0", "endpoint": "/oauth/token", "status_code": 401,
+            })
+            for i in range(20)
+        ]
+        r = c.post("/api/v1/ingest/replay", content="\n".join(lines), headers={"content-type": "application/x-ndjson"})
+        assert r.status_code == 200 and r.json()["ingested"] == 20
+        listing = c.get("/api/v1/signatures").json()
         assert listing["count"] >= 1
         sig = listing["signatures"][0]
         assert sig["threat_type"]  # a concrete threat type was learned

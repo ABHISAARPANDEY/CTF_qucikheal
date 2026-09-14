@@ -640,6 +640,19 @@ def detect(event: Event, context: Optional[DetectionContext] = None) -> Threat:
 
     breakdown = risk_breakdown(event, signals)
     risk = round(max(0.0, min(10.0, sum(breakdown.values()))), 2)
+
+    # Noise floor: normal (INFO) traffic sometimes trips a weak ML signal —
+    # the isolation forest flags ~5% of samples by its contamination setting,
+    # and z-scores cross 2σ on the tails of a healthy population. Those are not
+    # incidents. Keep such low-risk INFO events labelled BENIGN so the live
+    # stream isn't a wall of "anomaly", rather than promoting them.
+    t = get_thresholds()
+    if threat_type == ThreatType.ANOMALY and event.severity == Severity.INFO and risk < t.sev_low:
+        threat_type = ThreatType.BENIGN
+        signals = []
+        breakdown = risk_breakdown(event, signals)
+        risk = round(max(0.0, min(10.0, sum(breakdown.values()))), 2)
+
     confidence = calculate_confidence(signals)
     severity = _severity_for_risk(risk)
     correlation = _detect_correlation(threat_type, ctx)
