@@ -25,6 +25,8 @@ class ThreatType(str, Enum):
     PRIVILEGE_ESCALATION = "privilege_escalation"
     LATERAL_MOVEMENT = "lateral_movement"
     INSIDER = "insider"
+    CREDENTIAL_STUFFING = "credential_stuffing"
+    BENIGN = "benign"
     ANOMALY = "anomaly"
     UNKNOWN = "unknown"
 
@@ -79,3 +81,21 @@ class Threat(BaseModel):
             "attack sequence (e.g. 'multi_stage_attack', 'sustained_attack')."
         ),
     )
+    risk_breakdown: dict[str, float] = Field(
+        default_factory=dict,
+        description="Per-factor contribution to risk_score (sums to risk_score).",
+    )
+    entity: dict[str, str] | None = Field(
+        default=None,
+        description="Primary entity the threat is attributed to: {'type': 'ip'|'user'|'subnet', 'key': ...}.",
+    )
+    features: dict[str, float] = Field(
+        default_factory=dict,
+        description="Behavioural feature vector of the primary entity at detection time.",
+    )
+    zscores: dict[str, float] = Field(
+        default_factory=dict,
+        description="Per-feature z-scores vs. the entity-population baseline.",
+    )
+    campaign_id: str | None = Field(default=None, description="Distributed-campaign cluster id, if any.")
+    mitre: list[str] = Field(default_factory=list, description="MITRE ATT&CK technique ids.")

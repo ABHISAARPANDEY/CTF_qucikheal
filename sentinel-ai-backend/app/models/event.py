@@ -67,3 +67,17 @@ class Event(BaseModel):
     message: Annotated[str, Field(min_length=1, max_length=2048)] = Field(
         ..., description="Human-readable description of the event."
     )
+
+    # Optional structured telemetry (all additive; detection tolerates None).
+    username: str | None = Field(default=None, max_length=256, description="Account targeted or acting.")
+    dest_port: int | None = Field(default=None, ge=0, le=65535, description="Destination port.")
+    user_agent: str | None = Field(default=None, max_length=512)
+    status_code: int | None = Field(default=None, ge=100, le=599)
+    endpoint: str | None = Field(default=None, max_length=512)
+    geo: str | None = Field(default=None, max_length=2, description="ISO-3166 alpha-2 country.")
+    asn: int | None = Field(default=None, ge=0)
+    label: str | None = Field(
+        default=None,
+        max_length=64,
+        description="Ground-truth attack label for evaluation only. Never read by detection.",
+    )
