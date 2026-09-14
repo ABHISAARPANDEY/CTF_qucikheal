@@ -34,6 +34,12 @@ services:
     buildCommand: npm ci && npm run build
     # Relative to rootDir (see https://render.com/docs/monorepo-support)
     staticPublishPath: ./dist
+    # SPA fallback: client-side routes (/alerts, /honeypot, …) must serve
+    # index.html instead of 404 on a hard refresh or deep link.
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
     envVars:
       - key: NODE_VERSION
         value: "22"
