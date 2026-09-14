@@ -7,21 +7,25 @@ import AICopilotPanel from '../panels/AICopilotPanel';
 
 export default function OverviewPage() {
   return (
-    <div className="flex-1 min-h-0 flex flex-col gap-2 p-3 overflow-y-auto xl:overflow-hidden scrollbar-cyber">
+    <div className="flex-1 min-h-0 flex flex-col gap-2 p-3 overflow-y-auto scrollbar-cyber">
       <KpiRow />
-      <div className="flex-1 min-h-0 grid gap-2 grid-cols-1 xl:grid-cols-[minmax(0,2fr)_minmax(320px,1fr)]">
-        <div className="min-h-0 flex flex-col gap-2">
-          <div className="shrink-0 h-[232px]">
+      <div className="grid gap-2 grid-cols-1 xl:grid-cols-[minmax(0,2fr)_minmax(340px,1fr)]">
+        <div className="flex flex-col gap-2">
+          <div className="h-[232px]">
             <AlertsChart />
           </div>
-          <div className="flex-1 min-h-[360px]">
+          <div className="h-[460px]">
             <EventStream />
           </div>
         </div>
-        <div className="min-h-0 grid gap-2 grid-rows-[auto_minmax(160px,1fr)_minmax(220px,1.2fr)]">
+        <div className="flex flex-col gap-2">
           <RiskArc />
-          <CampaignStrip />
-          <AICopilotPanel />
+          <div className="h-[220px]">
+            <CampaignStrip />
+          </div>
+          <div className="h-[420px]">
+            <AICopilotPanel />
+          </div>
         </div>
       </div>
     </div>
