@@ -59,8 +59,16 @@ export function useSystemMetrics(threat, newestEvent, telemetryLogs = []) {
 
   return useMemo(() => {
     const now = nowMs;
-    const pipelineAnomaly = resolveAnomalyProcess(threat);
-    const pipelineMsg = threat ? formatAnomalyMessage(threat, newestEvent) : null;
+    // A benign pipeline tick still carries a threat object (type "benign",
+    // risk ~0). Only treat it as an incident when it is genuinely alert-worthy,
+    // otherwise the honeypot mesh paints attacks that were never triggered.
+    const attackActive =
+      Boolean(threat) &&
+      threat.threat_type !== 'benign' &&
+      ((threat.risk_score ?? 0) >= 4 || threat.severity === 'high' || threat.severity === 'critical');
+    const activeThreat = attackActive ? threat : null;
+    const pipelineAnomaly = resolveAnomalyProcess(activeThreat);
+    const pipelineMsg = activeThreat ? formatAnomalyMessage(activeThreat, newestEvent) : null;
     const pipelineTarget = pipelineAnomaly?.systemId ?? null;
     const pipelinePid = pipelineAnomaly?.pid ?? null;
 
@@ -85,25 +93,25 @@ export function useSystemMetrics(threat, newestEvent, telemetryLogs = []) {
         }
       }
 
-      const isPipelineTarget = threat && pipelineTarget === id;
+      const isPipelineTarget = activeThreat && pipelineTarget === id;
       const hasWsAnomaly = anomalies.length > 0;
       const hasAnyAnomaly = isPipelineTarget || hasWsAnomaly;
 
       let cpu = 18 + wobble + cpuBoost;
-      if (isPipelineTarget && threat?.risk_score != null) {
-        cpu += Math.min(42, threat.risk_score * 3.2);
+      if (isPipelineTarget && activeThreat?.risk_score != null) {
+        cpu += Math.min(42, activeThreat.risk_score * 3.2);
       }
       cpu = Math.max(4, Math.min(96, cpu));
 
       let status = 'operational';
       if (hasAnyAnomaly) {
         const crit =
-        threat?.severity === 'critical' ||
-        (threat?.risk_score ?? 0) >= 8 ||
+        activeThreat?.severity === 'critical' ||
+        (activeThreat?.risk_score ?? 0) >= 8 ||
         anomalies.some((x) => x.payload?.data?.status === 'critical');
         const high =
-        threat?.severity === 'high' ||
-        (threat?.risk_score ?? 0) >= 5 ||
+        activeThreat?.severity === 'high' ||
+        (activeThreat?.risk_score ?? 0) >= 5 ||
         anomalies.some((x) => x.payload?.data?.status === 'malicious');
         if (crit) status = 'critical';else
         if (high || hasWsAnomaly) status = 'degraded';else

@@ -51,17 +51,19 @@ export function useInfrastructure() {
   const target = resolveTargetSystem(threat);
 
   return useMemo(() => {
-    const targetId = target;
-    const lateral = targetId ? new Set(lateralSystems(targetId)) : new Set();
-
     const severity = threat?.severity ?? null;
     const risk = threat?.risk_score ?? 0;
-    const isCritical =
-    threat && (
-    severity === 'critical' || risk >= 8);
-    const isHigh =
-    threat && (
-    severity === 'high' || risk >= 5);
+    // Benign ticks still carry a threat; only escalate on a real alert so the
+    // topology doesn't show warnings when nothing was triggered.
+    const attackActive =
+      Boolean(threat) &&
+      threat.threat_type !== 'benign' &&
+      (risk >= 4 || severity === 'high' || severity === 'critical');
+    const targetId = attackActive ? target : null;
+    const lateral = targetId ? new Set(lateralSystems(targetId)) : new Set();
+
+    const isCritical = attackActive && (severity === 'critical' || risk >= 8);
+    const isHigh = attackActive && (severity === 'high' || risk >= 5);
 
     const systems = {};
     let critical = 0;
@@ -95,7 +97,7 @@ export function useInfrastructure() {
         'normal';
       } else {
         if (isPrimary && isCritical) status = 'critical';else
-        if (isPrimary && (isHigh || threat)) status = 'warning';else
+        if (isPrimary && isHigh) status = 'warning';else
         if (isLateral && (isCritical || isHigh)) status = 'warning';
       }
 

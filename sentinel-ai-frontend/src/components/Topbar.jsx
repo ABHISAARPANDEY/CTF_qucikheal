@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
-import { Bot, Command, RotateCcw, UserCog } from 'lucide-react';
+import { Bot, Command, Moon, RotateCcw, Sun, UserCog } from 'lucide-react';
 import { Button } from './ui/button';
 import { Kbd } from './ui/kbd';
 import { cn } from '../lib/utils';
@@ -9,6 +9,7 @@ import { selectAlertList, selectStats, selectStatus } from '../lib/selectors';
 import { resetDemoState } from '../lib/api';
 import { fmtNum, fmtPct } from '../lib/format';
 import { bus, EVENTS } from '../lib/eventBus';
+import { getTheme, setTheme } from '../lib/theme';
 
 const TITLES = {
   '/': ['Overview', 'Live detection posture'],
@@ -36,6 +37,12 @@ export default function Topbar({ mode, onModeChange }) {
   const now = useClock();
   const location = useLocation();
   const [resetting, setResetting] = useState(false);
+  const [theme, setThemeState] = useState(getTheme);
+  const toggleTheme = () => {
+    const next = theme === 'light' ? 'dark' : 'light';
+    setTheme(next);
+    setThemeState(next);
+  };
   const wsStatus = useRealtime(selectStatus);
   const stats = useRealtime(selectStats);
   const alerts = useRealtime(selectAlertList);
@@ -104,6 +111,10 @@ export default function Topbar({ mode, onModeChange }) {
       </div>
 
       <div className="flex-1" />
+
+      <Button variant="outline" size="icon" onClick={toggleTheme} aria-label="Toggle theme" className="text-fg-2">
+        {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+      </Button>
 
       <Button variant="outline" size="sm" onClick={() => bus.emit(EVENTS.OPEN_PALETTE)} className="gap-2 text-fg-2">
         <Command className="h-3.5 w-3.5" />

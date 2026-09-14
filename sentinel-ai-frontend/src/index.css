@@ -177,3 +177,67 @@ body {
   .print-report { position: static !important; overflow: visible !important; height: auto !important; color: #111; }
   .print-report * { color: #111 !important; background: transparent !important; border-color: #ccc !important; box-shadow: none !important; }
 }
+
+/* ------------------------------------------------------------------
+   Light theme — activated by data-theme="light" on <html>.
+   Overrides the token custom properties (and legacy aliases) so every
+   utility that reads var(--color-*) adapts, charts included.
+   ------------------------------------------------------------------ */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --color-bg-0: #f7f7f8;
+  --color-bg-1: #ffffff;
+  --color-bg-2: #f1f1f3;
+  --color-bg-3: #e4e4e7;
+
+  --color-line: rgba(9, 9, 11, 0.08);
+  --color-line-strong: rgba(9, 9, 11, 0.16);
+
+  --color-fg-0: #18181b;
+  --color-fg-1: #3f3f46;
+  --color-fg-2: #71717a;
+  --color-fg-3: #a1a1aa;
+
+  --color-accent: #4f46e5;
+  --color-accent-hover: #4338ca;
+  --color-accent-soft: rgba(79, 70, 229, 0.10);
+
+  --color-sev-critical: #dc2626;
+  --color-sev-high: #ea580c;
+  --color-sev-medium: #ca8a04;
+  --color-sev-low: #16a34a;
+  --color-sev-info: #71717a;
+
+  --color-ok: #16a34a;
+  --color-warn: #ca8a04;
+  --color-bad: #dc2626;
+
+  /* legacy aliases */
+  --color-bg-base: #f7f7f8;
+  --color-bg-panel: #ffffff;
+  --color-bg-elevated: #f1f1f3;
+  --color-bg-sunken: #ececee;
+  --color-border-subtle: rgba(9, 9, 11, 0.08);
+  --color-border-strong: rgba(9, 9, 11, 0.16);
+  --color-neon-green: #16a34a;
+  --color-neon-red: #dc2626;
+  --color-neon-orange: #ea580c;
+  --color-neon-blue: #4f46e5;
+  --color-neon-cyan: #4f46e5;
+  --color-neon-violet: #7c3aed;
+  --color-fg-primary: #18181b;
+  --color-fg-secondary: #3f3f46;
+  --color-fg-muted: #71717a;
+  --color-fg-faint: #a1a1aa;
+}
+
+:root[data-theme="light"] ::selection {
+  background: rgba(79, 70, 229, 0.20);
+}
+
+/* Legacy glass surfaces read a translucent dark; force opaque card in light. */
+:root[data-theme="light"] .glass-panel,
+:root[data-theme="light"] .glass-deep {
+  background: var(--color-bg-1);
+}
