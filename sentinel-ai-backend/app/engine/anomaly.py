@@ -167,6 +167,9 @@ class CampaignMatch:
     fingerprint: tuple[str, str]
     distinct_ips: int
     distinct_subnets: int
+    distinct_users: int
+    fail_ratio: float
+    events: int
     members: list[str]
     signal: Signal
 
@@ -177,7 +180,8 @@ class CampaignClusterer:
         self._cap = cap
         self._max = max_fingerprints
         self._lock = Lock()
-        self._by_fp: "OrderedDict[tuple[str, str], deque[tuple[datetime, str]]]" = OrderedDict()
+        # per fingerprint: (timestamp, ip, username, is_failure)
+        self._by_fp: "OrderedDict[tuple[str, str], deque[tuple[datetime, str, str, bool]]]" = OrderedDict()
 
     @staticmethod
     def fingerprint(event: Event) -> tuple[str, str]:
@@ -199,9 +203,12 @@ class CampaignClusterer:
                     self._by_fp.popitem(last=False)
             else:
                 self._by_fp.move_to_end(fp)
-            buf.append((event.timestamp, ip))
-            live = [ip_ for ts, ip_ in buf if ts >= cutoff]
-        ips = set(live)
+            is_fail = event.status_code in (401, 403, 423, 429) if event.status_code is not None else "failed" in event.message.lower()
+            buf.append((event.timestamp, ip, event.username or "", is_fail))
+            live = [row for row in buf if row[0] >= cutoff]
+        ips = {row[1] for row in live}
+        users = {row[2] for row in live if row[2]}
+        fails = sum(1 for row in live if row[3])
         subnets = {subnet_of(i) for i in ips}
         fired = len(ips) >= t.campaign_min_ips and len(subnets) >= t.campaign_min_subnets
         strength = min(1.0, len(ips) / (2.0 * t.campaign_min_ips)) if fired else 0.0
@@ -210,6 +217,9 @@ class CampaignClusterer:
             fingerprint=fp,
             distinct_ips=len(ips),
             distinct_subnets=len(subnets),
+            distinct_users=len(users),
+            fail_ratio=fails / len(live) if live else 0.0,
+            events=len(live),
             members=sorted(ips)[:50],
             signal=Signal("distributed_campaign", fired, round(strength, 2)),
         )
@@ -222,15 +232,20 @@ class CampaignClusterer:
         with self._lock:
             items = list(self._by_fp.items())
         for fp, buf in items:
-            live = [ip for ts, ip in buf if ts >= cutoff]
-            ips = set(live)
+            live = [row for row in buf if row[0] >= cutoff]
+            ips = {row[1] for row in live}
             subnets = {subnet_of(i) for i in ips}
             if len(ips) >= t.campaign_min_ips and len(subnets) >= t.campaign_min_subnets:
+                users = {row[2] for row in live if row[2]}
+                fails = sum(1 for row in live if row[3])
                 out.append({
                     "campaign_id": str(uuid.uuid5(uuid.NAMESPACE_URL, "|".join(fp))),
                     "user_agent": fp[0], "endpoint": fp[1],
                     "distinct_ips": len(ips), "distinct_subnets": len(subnets),
+                    "distinct_users": len(users),
+                    "fail_ratio": round(fails / len(live), 3) if live else 0.0,
                     "events": len(live), "members": sorted(ips)[:50],
+                    "last_seen": max(row[0] for row in live).isoformat(),
                 })
         return sorted(out, key=lambda c: -c["distinct_ips"])
 

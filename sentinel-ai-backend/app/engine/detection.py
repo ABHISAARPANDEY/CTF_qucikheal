@@ -318,10 +318,21 @@ def _signal_port_scan(ip_fv: FeatureVector) -> Signal:
     return Signal("port_scan", fired, round(strength, 2))
 
 
-def _signal_credential_stuffing(ip_fv: FeatureVector, subnet_fv: FeatureVector) -> Signal:
+def _signal_credential_stuffing(
+    ip_fv: FeatureVector,
+    subnet_fv: FeatureVector,
+    campaign: Optional[_anomaly.CampaignMatch] = None,
+) -> Signal:
+    """Many distinct usernames with a high failure ratio — from one IP, one
+    /24, or (the proxy-pool case) one distributed campaign fingerprint."""
     t = get_thresholds()
-    best = max(ip_fv.distinct_users, subnet_fv.distinct_users)
-    fr = ip_fv.fail_ratio if ip_fv.distinct_users >= subnet_fv.distinct_users else subnet_fv.fail_ratio
+    views: list[tuple[float, float]] = [
+        (ip_fv.distinct_users, ip_fv.fail_ratio),
+        (subnet_fv.distinct_users, subnet_fv.fail_ratio),
+    ]
+    if campaign is not None and campaign.signal.fired:
+        views.append((float(campaign.distinct_users), campaign.fail_ratio))
+    best, fr = max(views, key=lambda v: v[0])
     fired = best >= t.stuffing_min_users and fr >= t.stuffing_fail_ratio
     strength = min(1.0, best / (2.0 * t.stuffing_min_users)) if fired else 0.0
     return Signal("credential_stuffing", fired, round(strength, 2))
@@ -491,7 +502,7 @@ def _select_threat_type(
         "distributed_sources": _signal_distributed_sources(event, ctx),
         "severity_history":    _signal_severity_history(event, ctx),
         "port_scan":           _signal_port_scan(ip_fv),
-        "credential_stuffing": _signal_credential_stuffing(ip_fv, subnet_fv),
+        "credential_stuffing": _signal_credential_stuffing(ip_fv, subnet_fv, analysis.campaign),
         "low_slow_brute":      _signal_low_slow_brute(user_fv),
     }
     ml = [Signal(s.name, s.fired, s.strength) for s in analysis.signals]
