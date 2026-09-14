@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { BellRing } from 'lucide-react';
+import { BellRing, Zap } from 'lucide-react';
 import { Badge } from '../ui/badge';
 import { Table, TBody, TD, TH, THead, TR, useSort, useVirtualRows } from '../ui/table';
 import { Empty } from '../ui/empty';
@@ -160,7 +160,14 @@ export default function AlertsPage() {
                       style={{ height: ROW }}
                     >
                       <TD><Badge variant={a.severity}>{a.severity}</Badge></TD>
-                      <TD className="text-fg-0">{titleCase(a.threat_type)}</TD>
+                      <TD className="text-fg-0">
+                        <span className="inline-flex items-center gap-1.5">
+                          {titleCase(a.threat_type)}
+                          {(a.signals ?? []).includes('signature_match') && (
+                            <Zap className="h-3 w-3 text-accent-hover" aria-label="instant signature match" />
+                          )}
+                        </span>
+                      </TD>
                       <TD mono className="text-fg-1">
                         <span className="text-fg-3">{a.entity?.type}:</span> {a.entity?.key}
                       </TD>

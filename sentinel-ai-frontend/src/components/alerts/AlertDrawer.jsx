@@ -6,6 +6,7 @@ import { Button } from '../ui/button';
 import RiskBreakdown from './RiskBreakdown';
 import ZScoreBars from './ZScoreBars';
 import { patchAlert } from '../../lib/api';
+import { Zap } from 'lucide-react';
 import { fmtTime, titleCase } from '../../lib/format';
 
 const STATUSES = [
@@ -68,6 +69,12 @@ export default function AlertDrawer({ alert, open, onClose, onChange }) {
       }
     >
       <div className="space-y-5">
+        {(alert.signals ?? []).includes('signature_match') && (
+          <div className="flex items-center gap-2 rounded-md border border-accent/40 bg-accent-soft px-3 py-2 text-[12.5px] text-accent-hover">
+            <Zap className="h-4 w-4" />
+            Instant detection — matched a learned signature on the first event.
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-2 text-[12px]">
           <Field label="Status"><Badge variant="neutral">{alert.status.replace('_', ' ')}</Badge></Field>
           <Field label="Risk"><span className="font-mono tabular text-fg-0">{alert.risk?.toFixed(2)}</span></Field>

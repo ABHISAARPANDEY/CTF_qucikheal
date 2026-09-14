@@ -197,6 +197,8 @@ export const detectionCampaigns = () => request('/detection/campaigns');
 export const detectionEntity = (type, key) =>
   request(`/detection/entity/${encodeURIComponent(type)}/${encodeURIComponent(key)}`);
 export const detectionRetrain = () => request('/detection/retrain', { method: 'POST' });
+export const listSignatures = () => request('/signatures');
+export const clearSignatures = () => request('/signatures', { method: 'DELETE' });
 
 export const incidentReport = (since) => request(`/reports/incident${qs({ since })}`);
 export const incidentReportMarkdown = (since) =>

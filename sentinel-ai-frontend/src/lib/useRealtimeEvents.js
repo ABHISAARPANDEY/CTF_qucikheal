@@ -269,6 +269,8 @@ export function useRealtimeEvents({
                 risk_score: payload.threat.risk_score,
                 severity: payload.threat.severity,
                 signals: payload.threat.signals ?? [],
+                matched_by_signature: payload.threat.matched_by_signature ?? false,
+                signature_id: payload.threat.signature_id ?? null,
                 alert_id: payload.alert_id ?? null,
                 label: incomingEvent.label ?? null,
                 ts: incomingEvent.timestamp

@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search } from 'lucide-react';
+import { Search, Zap } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Badge } from '../ui/badge';
 import { Table, TBody, TD, TH, THead, TR, useVirtualRows } from '../ui/table';
@@ -113,7 +113,10 @@ export default function EventStream({ height = 420 }) {
                     <TR key={e.id} clickable onClick={() => navigate(`/entities/ip/${encodeURIComponent(String(e.source_ip))}`)} style={{ height: ROW }}>
                       <TD mono className="text-fg-3">{fmtTime(e.timestamp)}</TD>
                       <TD>
-                        <Badge variant={benign ? 'outline' : effSev}>{benign ? 'benign' : titleCase(tt)}</Badge>
+                        <span className="inline-flex items-center gap-1.5">
+                          <Badge variant={benign ? 'outline' : effSev}>{benign ? 'benign' : titleCase(tt)}</Badge>
+                          {m?.matched_by_signature && <Zap className="h-3 w-3 text-accent-hover" aria-label="signature match" />}
+                        </span>
                       </TD>
                       <TD mono align="right" className={cn(benign ? 'text-fg-3' : 'text-fg-0')}>{(m?.risk_score ?? 0).toFixed(1)}</TD>
                       <TD mono className="text-fg-1">{String(e.source_ip)}</TD>

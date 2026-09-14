@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { RotateCcw, Save, Zap } from 'lucide-react';
+import { RotateCcw, Save, Trash2, Zap } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '../ui/card';
 import { Button } from '../ui/button';
 import { Slider } from '../ui/slider';
-import { getThresholds, putThresholds, resetThresholds, detectionRetrain, trafficConfig } from '../../lib/api';
+import { getThresholds, putThresholds, resetThresholds, detectionRetrain, trafficConfig, listSignatures, clearSignatures } from '../../lib/api';
+import { titleCase } from '../../lib/format';
 import { useRealtime } from '../../lib/useRealtime';
 import { selectEventsMeta, selectStats } from '../../lib/selectors';
 
@@ -45,6 +46,14 @@ export default function SettingsPage() {
   const [msg, setMsg] = useState('');
   const stats = useRealtime(selectStats);
   const meta = useRealtime(selectEventsMeta);
+  const [signatures, setSignatures] = useState({ count: 0, signatures: [] });
+
+  const loadSignatures = () => listSignatures().then(setSignatures).catch(() => void 0);
+  useEffect(() => {
+    loadSignatures();
+    const id = setInterval(loadSignatures, 5000);
+    return () => clearInterval(id);
+  }, []);
 
   useEffect(() => {
     getThresholds().then((t) => {
@@ -112,6 +121,49 @@ export default function SettingsPage() {
         </div>
       </div>
       {msg && <div className="mx-1 rounded-md border border-line bg-bg-2 px-3 py-1.5 text-[12px] text-fg-1">{msg}</div>}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Learned attack signatures</CardTitle>
+          <div className="flex items-center gap-2">
+            <span className="font-mono text-[11px] text-fg-3">{signatures.count}</span>
+            <Button variant="outline" size="xs" onClick={() => clearSignatures().then(loadSignatures).catch(() => void 0)} disabled={!signatures.count}>
+              <Trash2 className="h-3 w-3" /> Clear
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent className="p-0">
+          {signatures.signatures.length === 0 ? (
+            <div className="px-4 py-6 text-center text-[12.5px] text-fg-3">
+              No signatures yet — run an attack scenario. Each confirmed detection is distilled into a
+              signature so the next occurrence is caught instantly.
+            </div>
+          ) : (
+            <div className="max-h-[280px] overflow-y-auto scrollbar-cyber">
+              <table className="w-full text-[12px]">
+                <thead className="sticky top-0 bg-bg-1">
+                  <tr className="text-fg-3 text-[10.5px] uppercase tracking-[0.06em]">
+                    <th className="text-left font-medium px-4 h-8">Threat</th>
+                    <th className="text-left font-medium px-2">Indicator</th>
+                    <th className="text-right font-medium px-2">Risk</th>
+                    <th className="text-right font-medium px-4">Hits</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {signatures.signatures.map((sig) => (
+                    <tr key={sig.id} className="border-t border-line">
+                      <td className="px-4 h-9 text-fg-0 flex items-center gap-1.5"><Zap className="h-3 w-3 text-accent-hover" />{titleCase(sig.threat_type)}</td>
+                      <td className="px-2 font-mono text-fg-1 truncate max-w-[320px]" title={sig.indicator}>{sig.indicator}</td>
+                      <td className="px-2 text-right font-mono text-fg-0">{sig.risk?.toFixed(1)}</td>
+                      <td className="px-4 text-right font-mono text-fg-2">{sig.hits}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {stats && (
         <Card>
