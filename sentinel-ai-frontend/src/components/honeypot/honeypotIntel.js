@@ -249,10 +249,10 @@ export function detectPatterns(scenarioEvents, honeypotAnalyses = []) {
 
 
 const SEVERITY_PREFIX = {
-  info: '[*]',
-  warning: '[~]',
-  high: '[!]',
-  critical: '[✗]'
+  info: 'INFO ',
+  warning: 'WARN ',
+  high: 'ERR  ',
+  critical: 'CRIT '
 };
 
 const SEVERITY_CHAR_DELAY = {
@@ -276,12 +276,11 @@ honeypotAnalyses = [])
 {
   const meta = ATTACK_META[attackType] ?? ATTACK_META.ddos;
   const lines = [
-  '[*] sentinel-cli  v0.4.2 · honeypot observer shell',
-  '[*] frame source  : decoy mesh (truth plane)',
-  `[*] adversary src : ${attackerIp}`,
-  `[*] vector        : ${meta.short.toLowerCase()} — ${meta.blurb.toLowerCase()}`,
+  '# tail -f /var/log/honeypot/observer.log  (decoy mesh, truth plane)',
+  `sentinel-honeypot: INFO adversary source ${attackerIp}`,
+  `sentinel-honeypot: INFO vector ${meta.short.toLowerCase()} — ${meta.blurb.toLowerCase()}`,
   '',
-  '>>> ingress detected — channel pinned to sinkhole'];
+  'sentinel-honeypot: NOTICE ingress detected, channel pinned to sinkhole'];
 
 
 
@@ -291,8 +290,8 @@ honeypotAnalyses = [])
   if (scenarioEvents.length === 0 && honeypotActivities.length === 0 && honeypotAnalyses.length === 0) {
     lines.push(
       '',
-      '[*] awaiting orchestrator handshake …',
-      '[*] (no live events yet — press TRIGGER to engage)'
+      'sentinel-honeypot: INFO awaiting orchestrator handshake',
+      'sentinel-honeypot: INFO no live events yet — press TRIGGER to engage'
     );
     return lines;
   }
@@ -307,7 +306,7 @@ honeypotAnalyses = [])
     if (evt.stage !== lastStage) {
       lines.push('');
       lines.push(
-        `>>> stage ${evt.stage}/${evt.total_stages} · ${evt.severity.toUpperCase()}`
+        `>>> stage ${evt.stage}/${evt.total_stages} — ${evt.severity.toUpperCase()}`
       );
       lastStage = evt.stage;
     }
@@ -323,20 +322,21 @@ honeypotAnalyses = [])
 
   if (hpAct.length > 0 || hpAna.length > 0) {
     lines.push('');
-    lines.push('>>> honeypot behavior stream');
+    lines.push('>>> decoy behaviour stream');
     for (const evt of hpAct) {
       lines.push({
-        text: `[~] activity        : ${String(evt?.data?.action ?? 'unknown').replace(/_/g, ' ')}`,
+        text: `sentinel-honeypot: INFO activity ${String(evt?.data?.action ?? 'unknown').replace(/_/g, ' ')}`,
         charDelay: 12,
         pauseAfter: 180
       });
     }
     for (const evt of hpAna) {
+      const risk = String(evt?.data?.risk ?? 'low').toUpperCase();
+      const lvl = risk === 'CRITICAL' ? 'CRIT' : risk === 'HIGH' ? 'WARN' : 'INFO';
       lines.push({
-        text: `[!] analysis        : ${evt?.data?.pattern ?? 'unknown'} · risk ${String(evt?.data?.risk ?? 'low').toUpperCase()}`,
+        text: `sentinel-honeypot: ${lvl} pattern ${evt?.data?.pattern ?? 'unknown'} (risk ${risk})`,
         charDelay: 11,
-        pauseAfter: 180,
-        glitch: String(evt?.data?.risk ?? '').toLowerCase() === 'critical'
+        pauseAfter: 180
       });
     }
   }
@@ -346,11 +346,10 @@ honeypotAnalyses = [])
   if (last && last.stage === last.total_stages) {
     lines.push(
       '',
-      '>>> honeypot closure',
-      { text: '[⚡] adversary believes engagement succeeded — vault is honey-data', glitch: true, pauseAfter: 360 },
-      '[!] trapped in honeypot',
-      '[✓] activity being monitored',
-      '[✓] full session recorded — handing off to SOC observer plane'
+      '>>> closure',
+      'sentinel-honeypot: NOTICE adversary believes engagement succeeded — vault is honey data',
+      'sentinel-honeypot: WARN attacker trapped in decoy mesh',
+      'sentinel-honeypot: NOTICE full session recorded — handed to SOC observer plane'
     );
   }
 
@@ -361,32 +360,32 @@ honeypotAnalyses = [])
 function openingLines(attackType) {
   if (attackType === 'ddos') {
     return [
-    '[~] SYN backlog drained — attacker believes capacity exhausted',
-    '[*] capture iface eth-deception0 — packets pinned to sinkhole'];
+    'nginx[1182]: WARN worker_connections exhausted, SYN backlog drained',
+    'sentinel-honeypot: INFO capture iface eth0.deception, packets pinned to sinkhole'];
 
   }
   if (attackType === 'brute_force') {
     return [
-    '[~] auth surface mapped: POST /oauth/token (decoy)',
-    '[*] credential responses minted from honey vault'];
+    'auth-svc[2214]: WARN auth surface mapped POST /oauth/token (decoy)',
+    'sentinel-honeypot: INFO credential responses minted from honey vault'];
 
   }
   if (attackType === 'sql_injection') {
     return [
-    '[~] ORM leak fingerprint accepted · attacker thinks DB is exposed',
-    '[*] decoy schema returns synthetic rowsets'];
+    'db-firewall[512]: WARN ORM leak fingerprint accepted, DB appears exposed',
+    'postgres[771]: INFO decoy schema returning synthetic rowsets'];
 
   }
   if (attackType === 'insider') {
     return [
-    '[~] privileged session originated from VPN range 10.66.4.0/22',
-    '[*] off-hours activity — sentinel raised silent observation'];
+    'auditd[610]: WARN privileged session from VPN range 10.66.4.0/22',
+    'sentinel-honeypot: NOTICE off-hours activity, silent observation raised'];
 
   }
   if (attackType === 'multi_stage') {
     return [
-    '[~] kill chain engaged — multiple decoy systems instrumented',
-    '[*] adversary believes lateral movement is succeeding'];
+    'sentinel-honeypot: WARN kill chain engaged, multiple decoys instrumented',
+    'sentinel-honeypot: INFO adversary believes lateral movement is succeeding'];
 
   }
   return [];

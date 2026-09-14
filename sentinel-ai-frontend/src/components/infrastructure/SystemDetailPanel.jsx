@@ -274,7 +274,7 @@ function DetailCard({ system, onClose, sparkPath }) {
           </div>
         </div>
 
-        <div className="rounded-xl border border-neon-cyan/25 bg-black/70 p-3">
+        <div className="rounded-xl border border-neon-cyan/25 bg-bg-2 p-3">
           <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-neon-cyan mb-2">
             Sim terminal
           </div>

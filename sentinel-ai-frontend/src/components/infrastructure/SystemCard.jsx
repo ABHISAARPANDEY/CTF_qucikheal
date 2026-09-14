@@ -240,7 +240,7 @@ function StatusPill({ status, theme }) {
         'inline-flex items-center gap-1.5 rounded-full border px-2 h-[22px] shrink-0',
         'font-mono text-[9px] uppercase tracking-[0.22em]',
         status === 'normal' ?
-        'border-neon-green/30 bg-neon-green/[0.08] text-neon-green' :
+        'border-line-strong bg-neon-green/[0.08] text-neon-green' :
         status === 'warning' ?
         'border-neon-orange/40 bg-neon-orange/[0.10] text-neon-orange' :
         'border-neon-red/45 bg-neon-red/[0.12] text-neon-red text-glow-red'

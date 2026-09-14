@@ -40,7 +40,7 @@ export default function AttackerInfoPanel({
     <section
       className="
         relative h-full overflow-hidden rounded-xl
-        border border-neon-green/30 bg-black
+        border border-line-strong bg-bg-sunken
         shadow-[0_0_36px_-12px_rgba(0,255,159,0.45),0_0_0_1px_rgba(0,255,159,0.08)_inset]
         flex flex-col
       ">
@@ -51,7 +51,7 @@ export default function AttackerInfoPanel({
 
       
       {}
-      <header className="relative flex items-center gap-2 px-3 h-9 border-b border-neon-green/20 bg-black/70">
+      <header className="relative flex items-center gap-2 px-3 h-9 border-b border-line bg-bg-2">
         <UserX className="h-3.5 w-3.5 text-neon-green/80" />
         <span className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-neon-green/85 text-glow-green">
           adversary :: profile
@@ -142,7 +142,7 @@ export default function AttackerInfoPanel({
 
       {}
       <footer
-        className="relative z-10 px-3 h-7 border-t border-neon-green/20 bg-black/70 flex items-center overflow-hidden">
+        className="relative z-10 px-3 h-7 border-t border-line bg-bg-2 flex items-center overflow-hidden">
         
         <motion.span
           className="font-mono text-[10px] tracking-[0.24em] uppercase text-neon-green/65 text-glow-green whitespace-nowrap"
@@ -195,7 +195,7 @@ function Stat({ label, value }) {
 function TrappedChip({ trapped }) {
   if (!trapped) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-md border border-neon-green/25 bg-neon-green/[0.04] px-2 h-[26px] font-mono text-[11px] uppercase tracking-[0.22em] text-neon-green/60">
+      <span className="inline-flex items-center gap-1.5 rounded-md border border-line bg-neon-green/[0.04] px-2 h-[26px] font-mono text-[11px] uppercase tracking-[0.22em] text-neon-green/60">
         <span className="h-2 w-2 rounded-full bg-neon-green/40" />
         standby
       </span>);

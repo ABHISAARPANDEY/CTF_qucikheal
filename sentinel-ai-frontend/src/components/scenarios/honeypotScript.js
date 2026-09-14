@@ -1,180 +1,171 @@
+// Realistic decoy-capture transcripts.
+//
+// Lines are written to read like a real captured attacker session interleaved
+// with host syslog: a shell prompt for the adversary's own input, then
+// sshd/nginx/auth-svc/kernel log lines the honeypot recorded. The Terminal
+// component colours lines by syslog severity keywords (WARN/ERR/CRIT/…) and
+// by the `user@host:~#` prompt pattern — no theatrical markup.
 
+const HOST = {
+  ddos: 'edge-gw-02',
+  brute_force: 'auth-01',
+  sql_injection: 'db-primary',
+  insider: 'db-primary',
+  multi_stage: 'edge-gw-02'
+};
 
-
-
-
-
-
+function ts(offsetSec = 0) {
+  const d = new Date(Date.now() + offsetSec * 1000);
+  return d.toISOString().replace('T', ' ').slice(0, 19);
+}
 
 function flavor(type) {
   if (type === 'ddos') {
-    return {
-      scan: '[~] SYN probes across decoy VIP pool · 14 hosts responsive',
-      exploit: '[~] amplifying flood toward sinkhole · capture iface eth-deception0',
-      access: '[+] SYN backlog drained — attacker believes capacity exhausted'
-    };
+    return [
+      'kernel: [ nf_conntrack ] table full, dropping packet',
+      'nginx[1182]: WARN 4092 pending connections, worker_connections exhausted',
+      'haproxy[880]: NOTICE backend web_pool has no available server, sinkholing',
+      'sentinel-sensor: SYN flood 1.9 Mpps from ~48210 sources -> 203.0.113.10:443'
+    ];
   }
   if (type === 'brute_force') {
-    return {
-      scan: '[+] auth surface mapped: POST /oauth/token · MFA hooks present (fake)',
-      exploit: '[~] credential spray · rotating proxies · 240 attempts/min (logged)',
-      access: '[+] token minted — session bound to honey vault namespace'
-    };
+    return [
+      "sshd[3391]: Failed password for invalid user admin from 45.146.164.12 port 51044 ssh2",
+      "sshd[3391]: Failed password for root from 45.146.164.71 port 51120 ssh2",
+      "auth-svc[2214]: WARN 214 failed logins for 'root' from /24 45.146.164.0 in 60s",
+      "sshd[3391]: Accepted password for svc_deploy from 45.146.164.12 port 51180 ssh2 (decoy)"
+    ];
   }
   if (type === 'sql_injection') {
-    return {
-      scan: '[~] ORM leak fingerprint · union-select patterns on decoy schema',
-      exploit: '[+] stacked query neutralized · rerouted to synthetic rowset',
-      access: '[+] extracted 12 honey rows · checksum mismatch (expected)'
-    };
+    return [
+      "nginx[1182]: 45.9.148.33 \"GET /accounts?id=1' OR '1'='1 HTTP/1.1\" 200",
+      'postgres[771]: LOG statement: SELECT * FROM accounts WHERE id=1 UNION SELECT usename,passwd FROM pg_shadow',
+      'db-firewall[512]: WARN union-based payload matched rule SQLI-014, rerouting to decoy schema',
+      'sentinel-sensor: NOTICE 12 rows returned from honey_accounts (synthetic PII)'
+    ];
   }
-  return {
-    scan: '[~] multi-vector probe · correlating across staged subnets',
-    exploit: '[~] exploit chain assembled · execution deferred to sandbox shim',
-    access: '[+] lateral markers planted · attacker mapping fake topology'
-  };
+  if (type === 'insider') {
+    return [
+      "auditd[610]: type=USER_CMD msg=op=bulk_export acct=j.reyes res=success",
+      'postgres[771]: LOG duration: 8841 ms  statement: COPY customer_accounts TO STDOUT',
+      'db-firewall[512]: WARN off-hours bulk read 2.1M rows by j.reyes via vpn-pool-7',
+      'sentinel-sensor: NOTICE egress 198.51.100.42:8443 flagged — data staged in decoy bucket'
+    ];
+  }
+  return [
+    'sentinel-sensor: recon sweep across 10.66.0.0/22, 14 decoy hosts responsive',
+    "sshd[3391]: Failed password for root from 185.220.101.4 port 43110 ssh2",
+    'db-firewall[512]: WARN SQLI probe on /accounts/balance after auth compromise',
+    'sentinel-sensor: NOTICE lateral markers planted, attacker mapping fabricated topology'
+  ];
 }
-
-
-
-
 
 export function buildHoneypotEngagement(attack) {
-  const f = flavor(attack.backendType ?? '');
-  const name = attack.name?.toLowerCase?.() ?? 'scenario';
+  const type = attack.backendType ?? 'multi_stage';
+  const host = HOST[type] ?? 'edge-gw-02';
+  const name = attack.name ?? 'scenario';
+  const f = flavor(type);
 
   return [
-  '[*] sentinel-cli  v0.4.2 · engagement shell',
-  `[*] operator frame : adversary PoV (simulated)`,
-  `[*] scenario       : ${name}`,
-  `[*] classifier     : ${attack.category}`,
-  '',
-  '>>> phase 1 / scanning — perimeter reconnaissance',
-  '[*] resolving decoy ingress … ok',
-  '[+] passive DNS: *.sentinel-honey.internal → 10.66.0.0/22',
-  f.scan,
-  '[⚡] traceroute hops collapse after hop 4 — possible path obfuscation',
-  { text: '[*] ∙∙∙ staging fingerprint corpus ∙∙∙', pauseAfter: 900, charDelay: 22 },
-  '',
-  '>>> phase 2 / exploiting — weaponization & delivery',
-  `[~] aligning payload template with "${name}"`,
-  '[+] exploit kit hydrated · zero persistent writes',
-  f.exploit,
-  '[!] sandbox jitter · syscall latency +48ms vs baseline',
-  { text: '[⚡] memory layout entropy spike — possible instrumentation', glitch: true, pauseAfter: 420 },
-  '',
-  '>>> phase 3 / accessing data — collection & exfil (believed)',
-  '[+] privileged handle acquired on honey dataset',
-  f.access,
-  '[~] gzip stream initiated toward egress endpoint …',
-  '[⚡] TLS handshake presents cert signed by "TotallyLegit CA"',
-  { text: '[*] ∙∙∙ buffering ostensible payload ∙∙∙', pauseAfter: 1400, charDelay: 18 },
-  '',
-  '>>> honeypot behavior — synthetic latency / strange responses',
-  { text: '[!] peer reset after window scale negotiation — retry 1/3', pauseAfter: 520 },
-  '[~] HTTP 418 returned from decoy API (intentional)',
-  { text: '[⚡] clock skew detected: -473821s — NTP pollution?', glitch: true, pauseAfter: 360 },
-  '[*] substituting canned secrets from honey vault …',
-  { text: '[*] ∙∙∙ environment instability · jitter climbing ∙∙∙', pauseAfter: 720, charDelay: 20 },
-  '',
-  '>>> uplink — sentinel pipeline',
-  `[*] backend vector : ${attack.backendType ?? 'randomized'}`,
-  '[*] dispatching pipeline tick …',
-  '[*] awaiting correlated telemetry …'];
-
+    `# session captured on decoy ${host} — scenario: ${name.toLowerCase()}`,
+    `# attacker point of view (simulated) · ${ts()}`,
+    '',
+    '>>> reconnaissance',
+    `root@${host}:~# whoami && id`,
+    'root  uid=0(root) gid=0(root) groups=0(root)',
+    `root@${host}:~# nmap -sS -p- 10.66.0.12`,
+    'Starting Nmap 7.94 ( https://nmap.org )',
+    'Nmap scan report for 10.66.0.12  (decoy)',
+    'PORT     STATE SERVICE',
+    '22/tcp   open  ssh',
+    '443/tcp  open  https',
+    '5432/tcp open  postgresql',
+    { text: f[0], pauseAfter: 600 },
+    '',
+    '>>> exploitation',
+    { text: f[1], pauseAfter: 300 },
+    { text: f[2], pauseAfter: 300 },
+    'sentinel-sensor: NOTICE payload executed in sandbox shim — zero persistent writes',
+    '',
+    '>>> collection (believed successful)',
+    `root@${host}:~# cat /var/lib/app/secrets.env`,
+    'DB_PASSWORD=hunter2-DECOY',
+    'STRIPE_KEY=sk_live_0000DECOY0000',
+    { text: f[3], pauseAfter: 500 },
+    'sentinel-sensor: WARN attacker exfiltrating honey credentials (tracked)',
+    '',
+    '>>> uplink — sentinel pipeline',
+    `sentinel: forwarding decoy telemetry for vector "${type}"`,
+    'sentinel: awaiting correlated detection tick …'
+  ];
 }
-
-
-
 
 export function buildHoneypotPipelineFinale(event, threat, actions, explanation) {
   const truncMsg =
-  event.message.length > 70 ? `${event.message.slice(0, 70)}…` : event.message;
+    event.message.length > 80 ? `${event.message.slice(0, 80)}…` : event.message;
 
   const lines = [
-  '',
-  '>>> uplink locked — observer channel (not attacker egress)',
-  '[*] correlation agent: decoy mesh reporting truth plane',
-  '',
-  '>>> stage 1 / anomaly (observed)',
-  `[+] event observed   : ${event.event_type} from ${event.source_ip}`,
-  `[+] severity         : ${event.severity.toUpperCase()}`,
-  `[+] signal           : "${truncMsg}"`,
-  '',
-  '>>> stage 2 / detection',
-  `[+] threat type      : ${threat.threat_type}`,
-  `[+] confidence       : ${((threat.confidence ?? 0) * 100).toFixed(0)}%`,
-  `[+] risk score       : ${(threat.risk_score ?? 0).toFixed(1)} / 10  →  ${(threat.severity ?? 'unknown').toUpperCase()}`];
-
+    '',
+    '>>> sentinel correlation (truth plane)',
+    `sentinel: INFO event ${event.event_type} from ${event.source_ip}`,
+    `sentinel: INFO raw "${truncMsg}"`,
+    `sentinel: detection ${threat.threat_type} · risk ${(threat.risk_score ?? 0).toFixed(1)}/10 · conf ${((threat.confidence ?? 0) * 100).toFixed(0)}%`
+  ];
 
   if (threat.signals?.length) {
-    lines.push(`[+] signals fired    : ${threat.signals.join(', ')}`);
+    lines.push(`sentinel: signals ${threat.signals.join(', ')}`);
   }
   if (threat.correlation) {
-    lines.push(`[!] correlation      : ${threat.correlation.replace(/_/g, ' ')}`);
+    lines.push(`sentinel: WARN correlation ${threat.correlation.replace(/_/g, ' ')}`);
   }
 
-  lines.push('', '>>> stage 3 / containment');
-  if (actions.length === 0) {
-    lines.push('[*] playbook idle — observation mode retained');
+  lines.push('', '>>> containment');
+  if (!actions.length) {
+    lines.push('sentinel: NOTICE playbook idle — observation retained');
   } else {
     for (const a of actions) {
-      const prio = a.priority ? `  [${a.priority.toUpperCase()}]` : '';
-      lines.push(`[~] dispatching ${a.action_type} → ${a.target}${prio}`);
+      const prio = a.priority ? ` [${a.priority.toUpperCase()}]` : '';
+      lines.push(`sentinel: dispatch ${a.action_type} -> ${a.target}${prio}`);
     }
   }
 
   if (explanation?.summary) {
     const s = explanation.summary;
-    lines.push(`[✓] copilot trace      : ${s.length > 85 ? s.slice(0, 85) + '…' : s}`);
+    lines.push(`sentinel: copilot ${s.length > 90 ? s.slice(0, 90) + '…' : s}`);
   }
 
   lines.push(
     '',
-    '>>> honeypot closure',
-    { text: '[⚡] tearing down synthetic egress · sessions pinned to sinkhole', glitch: true, pauseAfter: 320 },
-    '[!] adversary channel status: contained',
-    '[✓] trapped in honeypot',
-    '[✓] activity being monitored',
-    '',
-    '[✓] sentinel pipeline complete — SOC retained full trace'
+    '>>> closure',
+    'sentinel: NOTICE decoy session contained, egress pinned to sinkhole',
+    'sentinel: NOTICE full session recorded — handed to SOC observer plane'
   );
 
   return lines;
 }
 
-
-
-
 export function buildPreviewHoneypotScript(attack) {
-  const f = flavor(attack.backendType ?? '');
-  const name = attack.name?.toLowerCase?.() ?? 'scenario';
+  const type = attack.backendType ?? 'multi_stage';
+  const host = HOST[type] ?? 'edge-gw-02';
+  const name = attack.name ?? 'scenario';
+  const f = flavor(type);
 
   return [
-  '[*] sentinel-cli  v0.4.2 · engagement shell',
-  `[*] scenario : ${name} (catalog preview — no live uplink)`,
-  '',
-  '>>> phase 1 / scanning',
-  '[+] decoy perimeter responsive',
-  f.scan,
-  '',
-  '>>> phase 2 / exploiting',
-  f.exploit,
-  { text: '[⚡] allocator fingerprint oscillates — honeypot shim active', glitch: true },
-  '',
-  '>>> phase 3 / accessing data',
-  f.access,
-  { text: '[*] ∙∙∙ exfil stream stalls · backpressure from observer ∙∙∙', pauseAfter: 1100, charDelay: 16 },
-  '',
-  '>>> honeypot behavior — delayed / synthetic responses',
-  { text: '[!] upstream RTT 4.2s · duplicate ACK storm (fabricated)', pauseAfter: 700 },
-  '[~] SMB dialect negotiation returns STATUS_INSUFFICIENT_RESOURCES',
-  '[⚡] kernel ring buffer: impossible IRQ ordering — simulation artifact',
-  { text: '[*] environment instability · entropy harvester thrashing', glitch: true, pauseAfter: 500 },
-  '',
-  '>>> closure',
-  '[✓] trapped in honeypot',
-  '[✓] activity being monitored',
-  '[i] live vectors: DDoS · brute force · SQLi · multi-vector — select to arm uplink'];
-
+    `# catalog preview — ${name.toLowerCase()} against decoy ${host} (no live uplink)`,
+    '',
+    '>>> reconnaissance',
+    { text: f[0], pauseAfter: 500 },
+    '',
+    '>>> exploitation',
+    { text: f[1], pauseAfter: 300 },
+    { text: f[2], pauseAfter: 300 },
+    '',
+    '>>> collection (synthetic)',
+    { text: f[3], pauseAfter: 600 },
+    'sentinel-sensor: NOTICE decoy responses fabricated — attacker sees honey data',
+    '',
+    '>>> closure',
+    'sentinel: NOTICE session recorded, activity monitored',
+    'sentinel: INFO live vectors: DDoS · brute force · SQLi · multi-vector — select to arm uplink'
+  ];
 }

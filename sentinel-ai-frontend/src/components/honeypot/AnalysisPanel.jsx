@@ -43,7 +43,7 @@ export default function AnalysisPanel({
     <section
       className="
         relative h-full overflow-hidden rounded-xl
-        border border-neon-green/30 bg-black
+        border border-line-strong bg-bg-sunken
         shadow-[0_0_36px_-12px_rgba(0,255,159,0.45),0_0_0_1px_rgba(0,255,159,0.08)_inset]
         flex flex-col
       ">
@@ -54,7 +54,7 @@ export default function AnalysisPanel({
 
       
       {}
-      <header className="relative flex items-center gap-2 px-3 h-9 border-b border-neon-green/20 bg-black/70">
+      <header className="relative flex items-center gap-2 px-3 h-9 border-b border-line bg-bg-2">
         <Microscope className="h-3.5 w-3.5 text-neon-green/80" />
         <span className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-neon-green/85 text-glow-green">
           behaviour :: forensic analysis
@@ -76,7 +76,7 @@ export default function AnalysisPanel({
 
       <div className="relative z-10 flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2 gap-px bg-neon-green/10">
         {}
-        <div className="bg-black p-4 min-h-0 overflow-y-auto scrollbar-cyber">
+        <div className="bg-bg-sunken p-4 min-h-0 overflow-y-auto scrollbar-cyber">
           <SectionHeader
             icon={<Activity className="h-3.5 w-3.5" />}
             title="Detected actions"
@@ -104,7 +104,7 @@ export default function AnalysisPanel({
         </div>
 
         {}
-        <div className="bg-black p-4 min-h-0 overflow-y-auto scrollbar-cyber">
+        <div className="bg-bg-sunken p-4 min-h-0 overflow-y-auto scrollbar-cyber">
           <SectionHeader
             icon={<Brain className="h-3.5 w-3.5" />}
             title="Honeypot analysis"
@@ -163,7 +163,7 @@ function SectionHeader({ icon, title, count }) {
 
 function EmptyState({ text }) {
   return (
-    <div className="mt-4 rounded-md border border-dashed border-neon-green/20 px-3 py-4 text-center">
+    <div className="mt-4 rounded-md border border-dashed border-line px-3 py-4 text-center">
       <p className="font-mono text-[11px] text-neon-green/45">{text}</p>
     </div>);
 
@@ -172,7 +172,7 @@ function EmptyState({ text }) {
 const SEV = {
   info: {
     text: 'text-neon-green/80',
-    border: 'border-neon-green/25',
+    border: 'border-line',
     bg: 'bg-neon-green/[0.04]',
     dot: 'bg-neon-green/60',
     glyph: '[*]'
@@ -311,7 +311,7 @@ function AnalysisRow({ evt }) {
 function KeywordCloud({ patterns }) {
   if (!patterns.length) return null;
   return (
-    <div className="mt-4 pt-3 border-t border-neon-green/15">
+    <div className="mt-4 pt-3 border-t border-line">
       <div className="font-mono text-[9.5px] uppercase tracking-[0.24em] text-neon-green/40 mb-1.5 flex items-center gap-1.5">
         <AlertTriangle className="h-3 w-3" />
         TTP fingerprint

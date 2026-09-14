@@ -174,7 +174,7 @@ function PageHeader({
   return (
     <header className="shrink-0 flex flex-wrap items-start justify-between gap-3 px-1">
       <div className="flex items-start gap-3 min-w-0">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-bg-elevated/70 border border-neon-green/30 text-neon-green shadow-[0_0_18px_-8px_rgba(0,255,159,0.65)]">
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-bg-2 border border-line text-sev-low">
           <Skull className="h-5 w-5" />
         </span>
         <div className="min-w-0">
@@ -190,9 +190,7 @@ function PageHeader({
             'Always-on decoy mesh — auto-engages whenever any attack hits the platform.'}
           </p>
           {error &&
-          <p className="font-mono text-[10.5px] uppercase tracking-[0.22em] text-neon-red text-glow-red mt-1">
-              [!] {error}
-            </p>
+          <p className="font-mono text-[11px] text-sev-critical mt-1">{error}</p>
           }
         </div>
       </div>
@@ -211,9 +209,9 @@ function PageHeader({
           disabled={busy}
           whileHover={busy ? undefined : { y: -1 }}
           whileTap={busy ? undefined : { scale: 0.97 }}
-          className="inline-flex items-center gap-2 rounded-lg border h-[34px] px-3 border-neon-green/45 bg-neon-green/[0.08] text-neon-green text-glow-green font-mono text-[11px] uppercase tracking-[0.22em] font-semibold shadow-[0_0_18px_-6px_rgba(0,255,159,0.55)] hover:border-neon-green/70 hover:bg-neon-green/[0.12] transition-cyber disabled:opacity-50 disabled:cursor-not-allowed">
+          className="inline-flex items-center gap-2 rounded-md h-[34px] px-3 bg-accent text-white border border-accent hover:bg-accent-hover font-medium text-[12.5px] transition-cyber disabled:opacity-50 disabled:cursor-not-allowed">
           <Play className="h-3.5 w-3.5" />
-          {busy ? 'engaging…' : 'simulate attack'}
+          {busy ? 'Engaging…' : 'Simulate attack'}
         </motion.button>
 
         <motion.button
@@ -222,9 +220,9 @@ function PageHeader({
           disabled={busy || !trapped}
           whileHover={busy || !trapped ? undefined : { y: -1 }}
           whileTap={busy || !trapped ? undefined : { scale: 0.97 }}
-          className="inline-flex items-center gap-2 rounded-lg border h-[34px] px-3 border-neon-red/45 bg-neon-red/[0.08] text-neon-red font-mono text-[11px] uppercase tracking-[0.22em] font-semibold shadow-[0_0_18px_-6px_rgba(255,59,59,0.55)] hover:border-neon-red/70 hover:bg-neon-red/[0.12] transition-cyber disabled:opacity-30 disabled:cursor-not-allowed">
+          className="inline-flex items-center gap-2 rounded-md h-[34px] px-3 border border-sev-critical/40 bg-sev-critical/10 text-sev-critical hover:bg-sev-critical/20 font-medium text-[12.5px] transition-cyber disabled:opacity-30 disabled:cursor-not-allowed">
           <Square className="h-3.5 w-3.5" />
-          release
+          Release
         </motion.button>
       </div>
     </header>);
@@ -234,15 +232,15 @@ function PageHeader({
 function StatusChip({ trapped }) {
   if (trapped) {
     return (
-      <span className="inline-flex items-center gap-1.5 rounded-full border h-[22px] px-2 border-neon-red/45 bg-neon-red/[0.10] text-neon-red text-glow-red font-mono text-[9px] uppercase tracking-[0.22em]">
-        <span className="h-1.5 w-1.5 rounded-full bg-neon-red shadow-[0_0_10px_rgba(255,59,59,0.85)] animate-anomaly-pulse" />
+      <span className="inline-flex items-center gap-1.5 rounded-full border h-[22px] px-2 border-sev-critical/40 bg-sev-critical/10 text-sev-critical font-mono text-[10px] uppercase tracking-[0.06em]">
+        <span className="h-1.5 w-1.5 rounded-full bg-sev-critical animate-blink" />
         Engaged
       </span>);
 
   }
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border h-[22px] px-2 border-neon-green/40 bg-neon-green/[0.10] text-neon-green font-mono text-[9px] uppercase tracking-[0.22em]">
-      <span className="h-1.5 w-1.5 rounded-full bg-neon-green shadow-[0_0_10px_rgba(0,255,159,0.7)] animate-pulse" />
+    <span className="inline-flex items-center gap-1.5 rounded-full border h-[22px] px-2 border-sev-low/40 bg-sev-low/10 text-sev-low font-mono text-[10px] uppercase tracking-[0.06em]">
+      <span className="h-1.5 w-1.5 rounded-full bg-sev-low" />
       Listening
     </span>);
 
@@ -252,22 +250,22 @@ function AttackPicker({ value, scenarioType, onChange, disabled }) {
   const selected = ATTACKS.find((a) => a.id === value) ?? ATTACKS[0];
   const meta = ATTACK_META[scenarioType] ?? ATTACK_META.multi_stage;
   return (
-    <label className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-lg border h-[34px] px-2.5 border-neon-green/30 bg-black/60 text-neon-green/85 font-mono text-[11px] uppercase tracking-[0.22em] focus-within:border-neon-green/60">
-      <Bug className="h-3.5 w-3.5 text-neon-green/70" />
-      <span className="text-neon-green/55">vector</span>
+    <label className="inline-flex min-w-0 max-w-full items-center gap-2 rounded-md border h-[34px] px-2.5 border-line-strong bg-bg-2 text-fg-1 font-mono text-[11.5px] focus-within:border-accent/60">
+      <Bug className="h-3.5 w-3.5 text-fg-3" />
+      <span className="text-fg-3">vector</span>
       <select
         title={selected?.name ?? ''}
         value={value}
         onChange={(e) => onChange(e.target.value)}
         disabled={disabled}
-        className="min-w-[130px] max-w-[220px] truncate appearance-none bg-transparent outline-none font-mono text-[11px] uppercase tracking-[0.22em] text-neon-green text-glow-green disabled:opacity-50 cursor-pointer">
+        className="min-w-[130px] max-w-[220px] truncate appearance-none bg-transparent outline-none font-mono text-[11.5px] text-fg-0 disabled:opacity-50 cursor-pointer">
         {ATTACKS.map((attack) =>
-        <option key={attack.id} value={attack.id} className="bg-black text-neon-green">
+        <option key={attack.id} value={attack.id} className="bg-bg-1 text-fg-0">
             {attack.name}
           </option>
         )}
       </select>
-      <span className="hidden xl:inline max-w-[180px] truncate text-neon-green/45 text-[9.5px]" title={selected?.desc ?? ''}>
+      <span className="hidden xl:inline max-w-[180px] truncate text-fg-3 text-[10px]" title={selected?.desc ?? ''}>
         · {meta.banner}
       </span>
     </label>);

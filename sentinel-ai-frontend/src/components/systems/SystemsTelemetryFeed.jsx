@@ -15,7 +15,7 @@ export default function SystemsTelemetryFeed({ entries, className = '' }) {
   return (
     <div
       className={cn(
-        'rounded-lg border border-border-subtle bg-black/35 overflow-hidden flex flex-col min-h-[72px]',
+        'rounded-lg border border-border-subtle bg-bg-sunken/35 overflow-hidden flex flex-col min-h-[72px]',
         className
       )}>
       
@@ -37,7 +37,7 @@ export default function SystemsTelemetryFeed({ entries, className = '' }) {
               'font-mono text-[10px] leading-snug rounded px-1.5 py-0.5',
               e.kind === 'anomaly' && 'bg-neon-red/10 text-neon-red/95 border border-neon-red/25',
               e.kind === 'recovery' &&
-              'bg-neon-green/10 text-neon-green/90 border border-neon-green/25 animate-recovery-line',
+              'bg-neon-green/10 text-neon-green/90 border border-line animate-recovery-line',
               e.kind === 'process_log' && 'text-fg-muted border border-transparent'
             )}>
             

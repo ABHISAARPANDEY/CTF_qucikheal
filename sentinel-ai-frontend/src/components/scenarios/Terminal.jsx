@@ -17,9 +17,10 @@ const CHAR_DELAY_MS = 14;
 const LINE_DELAY_MS = 200;
 
 const DEFAULT_IDLE = [
-'[*] sentinel-cli  v0.4.2 · honey mesh standby',
-'[*] adversary shell idle — select a scenario to engage decoys',
-'[*] all egress paths terminate in observation plane'];
+'# tail -f /var/log/honeypot/session.log',
+'sentinel-honeypot: decoy mesh armed, 14 sensors reporting',
+'sentinel-honeypot: no active session — launch a scenario to engage decoys',
+'sentinel-honeypot: all egress routed to observation plane (0.0.0.0/0 -> sinkhole)'];
 
 
 function normalizeEntry(entry) {
@@ -93,11 +94,7 @@ export default function Terminal({ script, runId = 'idle', idle = DEFAULT_IDLE }
 
   return (
     <motion.div
-      className="
-        relative h-full w-full overflow-hidden rounded-xl
-        border border-neon-green/30 bg-black
-        shadow-[0_0_44px_-12px_rgba(0,255,159,0.55),0_0_0_1px_rgba(0,255,159,0.08)_inset]
-      "
+      className="relative h-full w-full overflow-hidden rounded-lg border border-line bg-bg-sunken"
 
 
 
@@ -130,52 +127,16 @@ export default function Terminal({ script, runId = 'idle', idle = DEFAULT_IDLE }
       </AnimatePresence>
 
       {}
-      <div className="relative flex items-center gap-2 px-4 h-9 border-b border-neon-green/20 bg-black/70">
-        <span className="h-2.5 w-2.5 rounded-full bg-red-500/55" />
-        <span className="h-2.5 w-2.5 rounded-full bg-yellow-500/55" />
-        <span className="h-2.5 w-2.5 rounded-full bg-neon-green/55" />
-        <span className="ml-3 font-mono text-[10.5px] uppercase tracking-[0.22em] text-neon-green/70 text-glow-green">
-          sentinel:
+      <div className="relative flex items-center gap-2 px-4 h-9 border-b border-line bg-bg-2">
+        <span className="h-2.5 w-2.5 rounded-full bg-sev-critical/70" />
+        <span className="h-2.5 w-2.5 rounded-full bg-sev-medium/70" />
+        <span className="h-2.5 w-2.5 rounded-full bg-sev-low/70" />
+        <span className="ml-3 font-mono text-[11px] text-fg-2">soc@sentinel</span>
+        <span className="hidden sm:inline font-mono text-[10px] text-fg-3 ml-2 px-1.5 py-0.5 rounded border border-line">
+          decoy capture
         </span>
-        <span className="hidden sm:inline font-mono text-[9px] uppercase tracking-[0.28em] text-neon-violet/70 ml-2 px-1.5 py-0.5 rounded border border-neon-violet/25 bg-neon-violet/10">
-          decoy PoV
-        </span>
-        <span className="ml-auto font-mono text-[9.5px] tracking-[0.22em] text-neon-green/40">
-          ttyHoney0
-        </span>
+        <span className="ml-auto font-mono text-[10px] text-fg-3">/var/log/honeypot</span>
       </div>
-
-      {}
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 z-10 opacity-[0.065]"
-        style={{
-          background:
-          'repeating-linear-gradient(0deg, rgba(0,255,159,0.55) 0, rgba(0,255,159,0.55) 1px, transparent 1px, transparent 3px)'
-        }} />
-      
-
-      <motion.div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 z-10 bg-neon-green/[0.04]"
-        animate={
-        glitchPulse ?
-        { opacity: [0.05, 0.14, 0.06, 0.09] } :
-        { opacity: [0.04, 0.065, 0.048, 0.055] }
-        }
-        transition={
-        glitchPulse ? { duration: 0.35 } : { duration: 2.4, repeat: Infinity, ease: 'easeInOut' }
-        } />
-      
-
-      <div
-        aria-hidden
-        className="pointer-events-none absolute inset-0 z-10"
-        style={{
-          background:
-          'radial-gradient(ellipse at center, transparent 45%, rgba(0,0,0,0.58) 100%)'
-        }} />
-      
 
       {}
       <div className="relative z-0 h-[calc(100%-2.25rem)] overflow-y-auto scrollbar-cyber px-5 py-4 scroll-smooth">
@@ -199,20 +160,13 @@ function Line({ text, cursor = false }) {
   const empty = text === '';
 
   return (
-    <div
-      className={`font-mono text-[12.5px] leading-[1.58] whitespace-pre-wrap break-words ${tone}`}
-      style={{ textShadow: '0 0 6px rgba(0,255,159,0.32)' }}>
-      
+    <div className={`font-mono text-[12px] leading-[1.6] whitespace-pre-wrap break-words ${tone}`}>
+
       {empty ? <span className="opacity-0">.</span> : text}
       {cursor &&
       <span
         aria-hidden
-        className="
-            inline-block w-[0.55em] h-[1.05em] ml-[2px] align-text-bottom
-            bg-neon-green
-            shadow-[0_0_10px_rgba(0,255,159,0.88)]
-            animate-[blink_1.05s_step-end_infinite]
-          " />
+        className="inline-block w-[0.5em] h-[1.05em] ml-[2px] align-text-bottom bg-accent animate-[blink_1.05s_step-end_infinite]" />
 
 
 
@@ -225,15 +179,21 @@ function Line({ text, cursor = false }) {
 }
 
 function lineTone(line) {
-  if (!line) return 'text-neon-green/85';
-  if (line.startsWith('>>>')) return 'text-neon-cyan font-semibold text-glow-cyan';
-  if (line.startsWith('[+]')) return 'text-neon-green text-glow-green';
-  if (line.startsWith('[✓]')) return 'text-neon-green text-glow-green';
-  if (line.startsWith('[*]')) return 'text-neon-cyan/85';
-  if (line.startsWith('[~]')) return 'text-neon-orange/90';
-  if (line.startsWith('[!]')) return 'text-neon-red text-glow-red';
-  if (line.startsWith('[✗]')) return 'text-neon-red text-glow-red';
-  if (line.startsWith('[⚡]')) return 'text-neon-violet';
-  if (line.startsWith('[i]')) return 'text-fg-muted';
-  return 'text-neon-green/85';
+  if (!line) return 'text-fg-1';
+  // section headers and comments
+  if (line.startsWith('#') || line.startsWith('>>>')) return 'text-fg-3';
+  // the attacker's own shell input:  root@edge-gw-02:~# cmd   or   $ cmd
+  if (/^\S+@\S+[:~][^ ]*[#$]/.test(line) || line.startsWith('$ ')) return 'text-accent-hover font-medium';
+  // syslog severity keywords
+  if (/\b(CRIT|CRITICAL|ALERT|FATAL|EMERG)\b/.test(line)) return 'text-sev-critical font-medium';
+  if (/\b(ERR|ERROR|FAIL|FAILED|DENIED|REFUSED)\b/.test(line)) return 'text-sev-critical';
+  if (/\b(WARN|WARNING)\b/.test(line)) return 'text-sev-high';
+  if (/\b(NOTICE|ACCEPTED|CONTAINED|RESOLVED|BLOCKED|OK)\b/.test(line)) return 'text-sev-low';
+  if (/\b(INFO|DEBUG)\b/.test(line)) return 'text-fg-2';
+  // legacy bracket prefixes still supported
+  if (line.startsWith('[+]') || line.startsWith('[✓]')) return 'text-sev-low';
+  if (line.startsWith('[!]') || line.startsWith('[✗]')) return 'text-sev-critical';
+  if (line.startsWith('[~]')) return 'text-sev-high';
+  if (line.startsWith('[*]')) return 'text-fg-2';
+  return 'text-fg-1';
 }
