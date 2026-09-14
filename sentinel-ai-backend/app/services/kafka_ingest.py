@@ -59,11 +59,22 @@ def normalize_to_event(payload: dict[str, Any]) -> Event:
         ua = payload.get("user_agent") or "unknown-agent"
         message = f"{method} {path} status={status} ua={ua}"
 
+    raw_status = payload.get("status_code")
+    if raw_status is None and isinstance(payload.get("status"), int):
+        raw_status = payload.get("status")
     return Event(
         source_ip=source_ip,
         event_type=_map_event_type(payload.get("event_type")),
         severity=_map_severity(payload.get("severity"), message),
         message=message[:2000],
+        username=payload.get("username") or payload.get("user"),
+        dest_port=payload.get("dest_port") or payload.get("port"),
+        user_agent=payload.get("user_agent"),
+        status_code=raw_status,
+        endpoint=payload.get("endpoint") or payload.get("path"),
+        geo=payload.get("geo"),
+        asn=payload.get("asn"),
+        label=payload.get("label"),
     )
 
 

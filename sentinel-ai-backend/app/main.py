@@ -1,6 +1,7 @@
 """FastAPI application entrypoint for SentinelAI."""
 
 from contextlib import asynccontextmanager
+import json
 import time
 from uuid import uuid4
 
@@ -10,6 +11,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import api_router
 from app.core.config import get_settings
 from app.core.logger import configure_logging, get_logger
+from app.core.thresholds import configure_path
+from app.engine import anomaly
+from app.models.ws_frames import validate_ws_frame
+from app.services.alert_store import init_alert_store
+from app.services.traffic_generator import init_traffic_generator
 from app.services.attack_orchestrator import (
     attack_router,
     init_attack_orchestrator,
@@ -46,6 +52,26 @@ async def lifespan(app: FastAPI):
                 model=settings.a4f_model,
             )
         )
+
+    configure_path(settings.thresholds_path)
+
+    async def _emit_frame(frame: dict) -> None:
+        await manager.broadcast_text(json.dumps(validate_ws_frame(frame)))
+
+    init_alert_store(emit=_emit_frame)
+    anomaly.reset_engine()
+    anomaly.get_engine().warm_up(n=2000, seed=42)
+    logger.info("anomaly engine warmed up (isolation forest fitted on 2000 benign vectors)")
+
+    traffic = None
+    if settings.traffic_enabled:
+        traffic = init_traffic_generator(
+            emit=manager.broadcast_text,
+            rate_eps=settings.traffic_rate_eps,
+            benign_ratio=settings.traffic_benign_ratio,
+            is_subscriber_present=lambda: manager.count > 0,
+        )
+        traffic.start()
 
     orchestrator = None
     if settings.orchestrator_enabled:
@@ -84,6 +110,8 @@ async def lifespan(app: FastAPI):
     try:
         yield
     finally:
+        if traffic is not None:
+            await traffic.stop()
         if kafka_ingestor is not None:
             await kafka_ingestor.stop()
         if attack_orch is not None:
